@@ -132,7 +132,7 @@ class ReadFromImpl {
             for (Predicate<RedisNodeDescription> predicate : predicates) {
 
                 for (RedisNodeDescription node : nodes) {
-                    if (predicate.test(node)) {
+                    if (predicate.test(node) && !node.isFailed()) {
                         result.add(node);
                     }
                 }

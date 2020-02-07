@@ -435,4 +435,14 @@ public class RedisClusterNode implements Serializable, RedisNodeDescription {
     public enum NodeFlag {
         NOFLAGS, MYSELF, SLAVE, REPLICA, MASTER, EVENTUAL_FAIL, FAIL, HANDSHAKE, NOADDR;
     }
+
+    @Override
+    public boolean isFailed() {
+        for (NodeFlag flag : flags) {
+            if (flag == NodeFlag.FAIL || flag == NodeFlag.EVENTUAL_FAIL) {
+                return true;
+            }
+        }
+        return false;
+    }
 }

@@ -30,4 +30,9 @@ public interface RedisNodeDescription extends RedisInstance {
      * @return the URI of the node
      */
     RedisURI getUri();
+
+    default boolean isFailed() {
+        return false;
+    }
+
 }

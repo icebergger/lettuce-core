@@ -41,6 +41,16 @@ public interface RedisCommands<K, V> extends BaseRedisCommands<K, V>, RedisClust
     String auth(CharSequence password);
 
     /**
+     * Authenticate to the server with username and password. Requires Redis 6 or newer.
+     *
+     * @param username the username
+     * @param password the password
+     * @return String simple-string-reply
+     * @since 6.0
+     */
+    String auth(String username, CharSequence password);
+
+    /**
      * Change the selected database for the current Commands.
      *
      * @param db the database number
@@ -62,4 +72,5 @@ public interface RedisCommands<K, V> extends BaseRedisCommands<K, V>, RedisClust
      * @return the underlying connection.
      */
     StatefulRedisConnection<K, V> getStatefulConnection();
+
 }

@@ -17,7 +17,7 @@ package io.lettuce.core.output;
 
 import java.nio.ByteBuffer;
 
-import io.lettuce.core.LettuceStrings;
+import io.lettuce.core.internal.LettuceStrings;
 import io.lettuce.core.ScanCursor;
 import io.lettuce.core.codec.RedisCodec;
 
@@ -51,4 +51,5 @@ public abstract class ScanOutput<K, V, T extends ScanCursor> extends CommandOutp
     }
 
     protected abstract void setOutput(ByteBuffer bytes);
+
 }

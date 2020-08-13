@@ -19,7 +19,7 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 
-import io.lettuce.core.LettuceStrings;
+import io.lettuce.core.internal.LettuceStrings;
 import io.lettuce.core.ScoredValue;
 import io.lettuce.core.codec.RedisCodec;
 import io.lettuce.core.internal.LettuceAssert;
@@ -31,11 +31,13 @@ import io.lettuce.core.internal.LettuceAssert;
  * @param <V> Value type.
  * @author Will Glozer
  */
-public class ScoredValueListOutput<K, V> extends CommandOutput<K, V, List<ScoredValue<V>>> implements
-        StreamingOutput<ScoredValue<V>> {
+public class ScoredValueListOutput<K, V> extends CommandOutput<K, V, List<ScoredValue<V>>>
+        implements StreamingOutput<ScoredValue<V>> {
 
     private boolean initialized;
+
     private Subscriber<ScoredValue<V>> subscriber;
+
     private V value;
 
     public ScoredValueListOutput(RedisCodec<K, V> codec) {
@@ -81,4 +83,5 @@ public class ScoredValueListOutput<K, V> extends CommandOutput<K, V, List<Scored
     public Subscriber<ScoredValue<V>> getSubscriber() {
         return subscriber;
     }
+
 }

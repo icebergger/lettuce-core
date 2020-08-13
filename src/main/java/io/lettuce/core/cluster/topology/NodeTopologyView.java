@@ -15,7 +15,6 @@
  */
 package io.lettuce.core.cluster.topology;
 
-import java.util.concurrent.ExecutionException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -32,13 +31,17 @@ import io.lettuce.core.cluster.models.partitions.RedisClusterNode;
 class NodeTopologyView {
 
     private static final Pattern NUMBER = Pattern.compile("(\\d+)");
+
     private final boolean available;
+
     private final RedisURI redisURI;
 
     private Partitions partitions;
+
     private final int connectedClients;
 
     private final long latency;
+
     private final String clusterNodes;
 
     private final String clientList;
@@ -66,24 +69,23 @@ class NodeTopologyView {
         this.latency = latency;
     }
 
-    static NodeTopologyView from(RedisURI redisURI, Requests clusterNodesRequests, Requests clientListRequests)
-            throws ExecutionException, InterruptedException {
+    static NodeTopologyView from(RedisURI redisURI, Requests clusterNodesRequests, Requests clientListRequests) {
 
         TimedAsyncCommand<String, String, String> nodes = clusterNodesRequests.getRequest(redisURI);
         TimedAsyncCommand<String, String, String> clients = clientListRequests.getRequest(redisURI);
 
         if (resultAvailable(nodes) && resultAvailable(clients)) {
-            return new NodeTopologyView(redisURI, nodes.get(), optionallyGet(clients), nodes.duration());
+            return new NodeTopologyView(redisURI, nodes.join(), optionallyGet(clients), nodes.duration());
         }
         return new NodeTopologyView(redisURI);
     }
 
-    private static <T> T optionallyGet(TimedAsyncCommand<?, ?, T> command) throws ExecutionException, InterruptedException {
+    private static <T> T optionallyGet(TimedAsyncCommand<?, ?, T> command) {
 
         if (command.isCompletedExceptionally()) {
             return null;
         }
-        return command.get();
+        return command.join();
     }
 
     private static boolean resultAvailable(RedisFuture<?> redisFuture) {
@@ -157,4 +159,5 @@ class NodeTopologyView {
     void setPartitions(Partitions partitions) {
         this.partitions = partitions;
     }
+
 }

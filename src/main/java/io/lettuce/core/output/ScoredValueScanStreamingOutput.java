@@ -17,7 +17,7 @@ package io.lettuce.core.output;
 
 import java.nio.ByteBuffer;
 
-import io.lettuce.core.LettuceStrings;
+import io.lettuce.core.internal.LettuceStrings;
 import io.lettuce.core.ScoredValue;
 import io.lettuce.core.StreamScanCursor;
 import io.lettuce.core.codec.RedisCodec;
@@ -57,4 +57,5 @@ public class ScoredValueScanStreamingOutput<K, V> extends ScanOutput<K, V, Strea
         value = null;
         output.setCount(output.getCount() + 1);
     }
+
 }

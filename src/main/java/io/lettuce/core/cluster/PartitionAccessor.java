@@ -35,24 +35,14 @@ class PartitionAccessor {
         this.partitions = partitions;
     }
 
-    List<RedisClusterNode> getMasters() {
-        return get(redisClusterNode -> redisClusterNode.is(RedisClusterNode.NodeFlag.MASTER));
+    List<RedisClusterNode> getUpstream() {
+        return get(redisClusterNode -> redisClusterNode.is(RedisClusterNode.NodeFlag.UPSTREAM));
     }
 
-    List<RedisClusterNode> getReplicas() {
-        return get(redisClusterNode -> redisClusterNode.is(RedisClusterNode.NodeFlag.SLAVE));
-
-    }
-
-    List<RedisClusterNode> getReplicas(RedisClusterNode master) {
-        return get(redisClusterNode -> redisClusterNode.is(RedisClusterNode.NodeFlag.SLAVE)
-                && master.getNodeId().equals(redisClusterNode.getSlaveOf()));
-    }
-
-    List<RedisClusterNode> getReadCandidates(RedisClusterNode master) {
-        return get(redisClusterNode -> redisClusterNode.getNodeId().equals(master.getNodeId())
-                || (redisClusterNode.is(RedisClusterNode.NodeFlag.SLAVE) && master.getNodeId().equals(
-                        redisClusterNode.getSlaveOf())));
+    List<RedisClusterNode> getReadCandidates(RedisClusterNode upstream) {
+        return get(redisClusterNode -> redisClusterNode.getNodeId().equals(upstream.getNodeId())
+                || (redisClusterNode.is(RedisClusterNode.NodeFlag.SLAVE)
+                        && upstream.getNodeId().equals(redisClusterNode.getSlaveOf())));
     }
 
     List<RedisClusterNode> get(Predicate<RedisClusterNode> test) {

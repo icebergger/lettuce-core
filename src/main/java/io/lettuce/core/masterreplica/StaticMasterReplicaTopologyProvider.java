@@ -20,6 +20,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
+import io.lettuce.core.internal.Exceptions;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import io.lettuce.core.RedisClient;
@@ -46,6 +47,7 @@ class StaticMasterReplicaTopologyProvider implements TopologyProvider {
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(StaticMasterReplicaTopologyProvider.class);
 
     private final RedisClient redisClient;
+
     private final Iterable<RedisURI> redisURIs;
 
     public StaticMasterReplicaTopologyProvider(RedisClient redisClient, Iterable<RedisURI> redisURIs) {
@@ -115,6 +117,7 @@ class StaticMasterReplicaTopologyProvider implements TopologyProvider {
             StatefulRedisConnection<String, String> connection) {
 
         return connection.reactive().role().collectList().map(RoleParser::parse)
-                .map(it -> new RedisMasterReplicaNode(uri.getHost(), uri.getPort(), uri, it.getRole()));
+                .map(it -> new RedisUpstreamReplicaNode(uri.getHost(), uri.getPort(), uri, it.getRole()));
     }
+
 }

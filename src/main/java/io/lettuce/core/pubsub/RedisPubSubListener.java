@@ -16,13 +16,14 @@
 package io.lettuce.core.pubsub;
 
 /**
- * Interface for redis pub/sub listeners.
+ * Interface for Redis Pub/Sub listeners.
  *
  * @param <K> Key type.
  * @param <V> Value type.
  * @author Will Glozer
  */
 public interface RedisPubSubListener<K, V> {
+
     /**
      * Message received from a channel subscription.
      *
@@ -71,4 +72,5 @@ public interface RedisPubSubListener<K, V> {
      * @param count Subscription count.
      */
     void punsubscribed(K pattern, long count);
+
 }

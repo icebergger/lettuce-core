@@ -17,7 +17,7 @@ package io.lettuce.core.output;
 
 import java.nio.ByteBuffer;
 
-import io.lettuce.core.LettuceStrings;
+import io.lettuce.core.internal.LettuceStrings;
 import io.lettuce.core.ScoredValue;
 import io.lettuce.core.codec.RedisCodec;
 
@@ -31,6 +31,7 @@ import io.lettuce.core.codec.RedisCodec;
 public class ScoredValueStreamingOutput<K, V> extends CommandOutput<K, V, Long> {
 
     private V value;
+
     private final ScoredValueStreamingChannel<V> channel;
 
     public ScoredValueStreamingOutput(RedisCodec<K, V> codec, ScoredValueStreamingChannel<V> channel) {
@@ -57,4 +58,5 @@ public class ScoredValueStreamingOutput<K, V> extends CommandOutput<K, V, Long> 
         value = null;
         output = output.longValue() + 1;
     }
+
 }

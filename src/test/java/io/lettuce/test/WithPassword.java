@@ -29,6 +29,7 @@ import io.lettuce.test.settings.TestSettings;
  * Utility to run a {@link ThrowingCallable callback function} while Redis is configured with a password.
  *
  * @author Mark Paluch
+ * @author Tugdual Grall
  */
 public class WithPassword {
 
@@ -65,7 +66,17 @@ public class WithPassword {
      * @param commands
      */
     public static void enableAuthentication(RedisCommands<String, String> commands) {
+
+        RedisConditions conditions = RedisConditions.of(commands);
+
         commands.configSet("requirepass", TestSettings.password());
+
+        // If ACL is supported let's create a test user
+        if (conditions.hasCommand("ACL")) {
+            Command<String, String, List<Object>> command = CliParser.parse(
+                    "ACL SETUSER " + TestSettings.aclUsername() + " on >" + TestSettings.aclPassword() + " ~cached:* +@all");
+            commands.dispatch(command.getType(), command.getOutput(), command.getArgs());
+        }
     }
 
     /**
@@ -75,13 +86,19 @@ public class WithPassword {
      */
     public static void disableAuthentication(RedisCommands<String, String> commands) {
 
-        RedisConditions conditions = RedisConditions.of(commands);
+        try {
+            commands.auth(TestSettings.password()); // reauthenticate as default user before disabling it
+        } catch (Exception e) {
+        }
 
+        RedisConditions conditions = RedisConditions.of(commands);
         commands.configSet("requirepass", "");
 
         if (conditions.hasCommand("ACL")) {
+            Command<String, String, List<Object>> command = CliParser.parse("ACL DELUSER " + TestSettings.aclUsername());
+            commands.dispatch(command.getType(), command.getOutput(), command.getArgs());
 
-            Command<String, String, List<Object>> command = CliParser.parse("acl setuser default nopass");
+            command = CliParser.parse("acl setuser default nopass");
             commands.dispatch(command.getType(), command.getOutput(), command.getArgs());
         }
     }

@@ -18,7 +18,7 @@ package io.lettuce.core.output;
 import java.nio.ByteBuffer;
 
 import io.lettuce.core.KeyValue;
-import io.lettuce.core.LettuceStrings;
+import io.lettuce.core.internal.LettuceStrings;
 import io.lettuce.core.ScoredValue;
 import io.lettuce.core.codec.RedisCodec;
 
@@ -33,6 +33,7 @@ import io.lettuce.core.codec.RedisCodec;
 public class KeyValueScoredValueOutput<K, V> extends CommandOutput<K, V, KeyValue<K, ScoredValue<V>>> {
 
     private K key;
+
     private V value;
 
     public KeyValueScoredValueOutput(RedisCodec<K, V> codec) {
@@ -68,4 +69,5 @@ public class KeyValueScoredValueOutput<K, V> extends CommandOutput<K, V, KeyValu
         key = null;
         value = null;
     }
+
 }

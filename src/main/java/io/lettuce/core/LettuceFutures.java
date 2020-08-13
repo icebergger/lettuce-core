@@ -27,7 +27,9 @@ import io.lettuce.core.internal.Futures;
  *
  * @author Mark Paluch
  * @since 3.0
+ * @deprecated since 6.0, use {@link Futures} instead.
  */
+@Deprecated
 public class LettuceFutures {
 
     private LettuceFutures() {
@@ -39,7 +41,7 @@ public class LettuceFutures {
      *
      * @param timeout Maximum time to wait for futures to complete.
      * @param futures Futures to wait for.
-     * @return {@literal true} if all futures complete in time, otherwise {@literal false}
+     * @return {@code true} if all futures complete in time, otherwise {@code false}
      * @since 5.0
      */
     public static boolean awaitAll(Duration timeout, Future<?>... futures) {
@@ -53,7 +55,7 @@ public class LettuceFutures {
      * @param timeout Maximum time to wait for futures to complete.
      * @param unit Unit of time for the timeout.
      * @param futures Futures to wait for.
-     * @return {@literal true} if all futures complete in time, otherwise {@literal false}
+     * @return {@code true} if all futures complete in time, otherwise {@code false}
      */
     public static boolean awaitAll(long timeout, TimeUnit unit, Future<?>... futures) {
         return Futures.awaitAll(timeout, unit, futures);

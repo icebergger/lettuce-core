@@ -27,12 +27,14 @@ import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import io.lettuce.core.*;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.cluster.api.StatefulRedisClusterConnection;
 import io.lettuce.core.cluster.api.async.RedisAdvancedClusterAsyncCommands;
 import io.lettuce.core.cluster.api.async.RedisClusterAsyncCommands;
+import io.lettuce.core.cluster.api.push.RedisClusterPushListener;
 import io.lettuce.core.cluster.api.reactive.RedisAdvancedClusterReactiveCommands;
 import io.lettuce.core.cluster.api.sync.NodeSelection;
 import io.lettuce.core.cluster.api.sync.NodeSelectionCommands;
@@ -58,26 +60,35 @@ import io.lettuce.core.protocol.RedisCommand;
 public class StatefulRedisClusterConnectionImpl<K, V> extends RedisChannelHandler<K, V>
         implements StatefulRedisClusterConnection<K, V> {
 
+    private final ClusterPushHandler pushHandler;
+
     protected final RedisCodec<K, V> codec;
+
     protected final RedisAdvancedClusterCommands<K, V> sync;
+
     protected final RedisAdvancedClusterAsyncCommandsImpl<K, V> async;
+
     protected final RedisAdvancedClusterReactiveCommandsImpl<K, V> reactive;
 
     private final ClusterConnectionState connectionState = new ClusterConnectionState();
 
-    private Partitions partitions;
+    private volatile Partitions partitions;
+
     private volatile CommandSet commandSet;
 
     /**
      * Initialize a new connection.
      *
      * @param writer the channel writer
+     * @param pushHandler the Cluster push handler
      * @param codec Codec used to encode/decode keys and values.
      * @param timeout Maximum time to wait for a response.
      */
-    public StatefulRedisClusterConnectionImpl(RedisChannelWriter writer, RedisCodec<K, V> codec, Duration timeout) {
+    public StatefulRedisClusterConnectionImpl(RedisChannelWriter writer, ClusterPushHandler pushHandler, RedisCodec<K, V> codec,
+            Duration timeout) {
 
         super(writer, timeout);
+        this.pushHandler = pushHandler;
         this.codec = codec;
 
         this.async = new RedisAdvancedClusterAsyncCommandsImpl<>(this, codec);
@@ -104,6 +115,16 @@ public class StatefulRedisClusterConnectionImpl<K, V> extends RedisChannelHandle
     @Override
     public RedisAdvancedClusterReactiveCommands<K, V> reactive() {
         return reactive;
+    }
+
+    @Override
+    public void addListener(RedisClusterPushListener listener) {
+        pushHandler.addListener(listener);
+    }
+
+    @Override
+    public void removeListener(RedisClusterPushListener listener) {
+        pushHandler.removeListener(listener);
     }
 
     CommandSet getCommandSet() {
@@ -168,6 +189,13 @@ public class StatefulRedisClusterConnectionImpl<K, V> extends RedisChannelHandle
         return provider.getConnectionAsync(ClusterConnectionProvider.Intent.WRITE, host, port);
     }
 
+    @Override
+    public void activated() {
+        super.activated();
+
+        async.clusterMyId().thenAccept(connectionState::setNodeId);
+    }
+
     ClusterDistributionChannelWriter getClusterDistributionChannelWriter() {
         return (ClusterDistributionChannelWriter) super.getChannelWriter();
     }
@@ -195,16 +223,15 @@ public class StatefulRedisClusterConnectionImpl<K, V> extends RedisChannelHandle
         if (local.getType().name().equals(AUTH.name())) {
             local = attachOnComplete(local, status -> {
                 if (status.equals("OK")) {
-                    char[] password = CommandArgsAccessor.getFirstCharArray(command.getArgs());
+                    List<char[]> args = CommandArgsAccessor.getCharArrayArguments(command.getArgs());
 
-                    if (password != null) {
-                        this.connectionState.setPassword(password);
+                    if (!args.isEmpty()) {
+                        this.connectionState.setUserNamePassword(args);
                     } else {
 
-                        String stringPassword = CommandArgsAccessor.getFirstString(command.getArgs());
-                        if (stringPassword != null) {
-                            this.connectionState.setPassword(stringPassword.toCharArray());
-                        }
+                        List<String> stringArgs = CommandArgsAccessor.getStringArguments(command.getArgs());
+                        this.connectionState
+                                .setUserNamePassword(stringArgs.stream().map(String::toCharArray).collect(Collectors.toList()));
                     }
                 }
             });
@@ -238,7 +265,19 @@ public class StatefulRedisClusterConnectionImpl<K, V> extends RedisChannelHandle
     }
 
     public void setPartitions(Partitions partitions) {
+
+        LettuceAssert.notNull(partitions, "Partitions must not be null");
+
         this.partitions = partitions;
+
+        String nodeId = connectionState.getNodeId();
+        if (nodeId != null && expireStaleConnections()) {
+
+            if (partitions.getPartitionByNodeId(nodeId) == null) {
+                getClusterDistributionChannelWriter().disconnectDefaultEndpoint();
+            }
+        }
+
         getClusterDistributionChannelWriter().setPartitions(partitions);
     }
 
@@ -263,9 +302,11 @@ public class StatefulRedisClusterConnectionImpl<K, V> extends RedisChannelHandle
 
     static class ClusterConnectionState extends ConnectionState {
 
+        private volatile String nodeId;
+
         @Override
-        protected void setPassword(char[] password) {
-            super.setPassword(password);
+        protected void setUserNamePassword(List<char[]> args) {
+            super.setUserNamePassword(args);
         }
 
         @Override
@@ -277,5 +318,27 @@ public class StatefulRedisClusterConnectionImpl<K, V> extends RedisChannelHandle
         protected void setReadOnly(boolean readOnly) {
             super.setReadOnly(readOnly);
         }
+
+        public String getNodeId() {
+            return nodeId;
+        }
+
+        public void setNodeId(String nodeId) {
+            this.nodeId = nodeId;
+        }
+
     }
+
+    private boolean expireStaleConnections() {
+
+        ClusterClientOptions options = getClusterClientOptions();
+        return options == null || options.isCloseStaleConnections();
+    }
+
+    private ClusterClientOptions getClusterClientOptions() {
+
+        ClientOptions options = getOptions();
+        return options instanceof ClusterClientOptions ? (ClusterClientOptions) options : null;
+    }
+
 }

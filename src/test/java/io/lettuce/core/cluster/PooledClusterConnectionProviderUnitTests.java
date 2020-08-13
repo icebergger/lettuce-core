@@ -41,6 +41,7 @@ import org.mockito.quality.Strictness;
 import io.lettuce.core.*;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.async.RedisAsyncCommands;
+import io.lettuce.core.api.push.PushListener;
 import io.lettuce.core.api.sync.RedisCommands;
 import io.lettuce.core.cluster.ClusterConnectionProvider.Intent;
 import io.lettuce.core.cluster.models.partitions.Partitions;
@@ -53,6 +54,8 @@ import io.lettuce.core.protocol.CommandType;
 import io.lettuce.core.resource.ClientResources;
 
 /**
+ * Unit tests for {@link PooledClusterConnectionProvider}.
+ *
  * @author Mark Paluch
  */
 @ExtendWith(MockitoExtension.class)
@@ -100,9 +103,9 @@ class PooledClusterConnectionProviderUnitTests {
         List<Integer> slots2 = IntStream.range(8192, SlotHash.SLOT_COUNT).boxed().collect(Collectors.toList());
 
         partitions.add(new RedisClusterNode(RedisURI.create("localhost", 1), "1", true, null, 0, 0, 0, slots1, Collections
-                .singleton(RedisClusterNode.NodeFlag.MASTER)));
+                .singleton(RedisClusterNode.NodeFlag.UPSTREAM)));
         partitions.add(new RedisClusterNode(RedisURI.create("localhost", 2), "2", true, "1", 0, 0, 0, slots2, Collections
-                .singleton(RedisClusterNode.NodeFlag.SLAVE)));
+                .singleton(RedisClusterNode.NodeFlag.REPLICA)));
 
         sut.setPartitions(partitions);
 
@@ -120,6 +123,7 @@ class PooledClusterConnectionProviderUnitTests {
 
         assertThat(connection).isSameAs(nodeConnectionMock);
         verify(connection).setAutoFlushCommands(true);
+        verify(connection).addListener(any(PushListener.class));
         verifyNoMoreInteractions(connection);
     }
 
@@ -130,12 +134,13 @@ class PooledClusterConnectionProviderUnitTests {
                 .thenReturn(
                 ConnectionFuture.from(socketAddressMock, CompletableFuture.completedFuture(nodeConnectionMock)));
 
-        sut.setReadFrom(ReadFrom.MASTER);
+        sut.setReadFrom(ReadFrom.UPSTREAM);
 
         StatefulRedisConnection<String, String> connection = sut.getConnection(Intent.READ, 1);
 
         assertThat(connection).isSameAs(nodeConnectionMock);
         verify(connection).setAutoFlushCommands(true);
+        verify(connection).addListener(any(PushListener.class));
         verifyNoMoreInteractions(connection);
     }
 
@@ -143,8 +148,7 @@ class PooledClusterConnectionProviderUnitTests {
     void shouldObtainConnectionReadFromSlave() {
 
         when(clientMock.connectToNodeAsync(eq(StringCodec.UTF8), eq("localhost:2"), any(), any()))
-                .thenReturn(
-                ConnectionFuture.from(socketAddressMock, CompletableFuture.completedFuture(nodeConnectionMock)));
+                .thenReturn(ConnectionFuture.from(socketAddressMock, CompletableFuture.completedFuture(nodeConnectionMock)));
 
         AsyncCommand<String, String, String> async = new AsyncCommand<>(new Command<>(CommandType.READONLY, null, null));
         async.complete();
@@ -169,12 +173,10 @@ class PooledClusterConnectionProviderUnitTests {
         when(nodeConnectionMock2.isOpen()).thenReturn(true);
 
         when(clientMock.connectToNodeAsync(eq(StringCodec.UTF8), eq("localhost:1"), any(), any()))
-                .thenReturn(
-                ConnectionFuture.from(socketAddressMock, CompletableFuture.completedFuture(nodeConnectionMock)));
+                .thenReturn(ConnectionFuture.from(socketAddressMock, CompletableFuture.completedFuture(nodeConnectionMock)));
 
         when(clientMock.connectToNodeAsync(eq(StringCodec.UTF8), eq("localhost:2"), any(), any()))
-                .thenReturn(
-                ConnectionFuture.from(socketAddressMock, CompletableFuture.completedFuture(nodeConnectionMock2)));
+                .thenReturn(ConnectionFuture.from(socketAddressMock, CompletableFuture.completedFuture(nodeConnectionMock2)));
 
         AsyncCommand<String, String, String> async = new AsyncCommand<>(new Command<>(CommandType.READONLY, null, null));
         async.complete();
@@ -201,12 +203,10 @@ class PooledClusterConnectionProviderUnitTests {
         when(nodeConnectionMock2.isOpen()).thenReturn(true);
 
         when(clientMock.connectToNodeAsync(eq(StringCodec.UTF8), eq("localhost:1"), any(), any()))
-                .thenReturn(
-                ConnectionFuture.from(socketAddressMock, CompletableFuture.completedFuture(nodeConnectionMock)));
+                .thenReturn(ConnectionFuture.from(socketAddressMock, CompletableFuture.completedFuture(nodeConnectionMock)));
 
         when(clientMock.connectToNodeAsync(eq(StringCodec.UTF8), eq("localhost:2"), any(), any()))
-                .thenReturn(
-                ConnectionFuture.from(socketAddressMock, CompletableFuture.completedFuture(nodeConnectionMock2)));
+                .thenReturn(ConnectionFuture.from(socketAddressMock, CompletableFuture.completedFuture(nodeConnectionMock2)));
 
         AsyncCommand<String, String, String> async = new AsyncCommand<>(new Command<>(CommandType.READONLY, null, null));
         async.complete();
@@ -229,8 +229,7 @@ class PooledClusterConnectionProviderUnitTests {
     void shouldCloseConnectionOnConnectFailure() {
 
         when(clientMock.connectToNodeAsync(eq(StringCodec.UTF8), eq("localhost:2"), any(), any()))
-                .thenReturn(
-                ConnectionFuture.from(socketAddressMock, CompletableFuture.completedFuture(nodeConnectionMock)));
+                .thenReturn(ConnectionFuture.from(socketAddressMock, CompletableFuture.completedFuture(nodeConnectionMock)));
 
         AsyncCommand<String, String, String> async = new AsyncCommand<>(new Command<>(CommandType.READONLY, null, null));
         async.completeExceptionally(new RuntimeException());
@@ -254,8 +253,7 @@ class PooledClusterConnectionProviderUnitTests {
     void shouldRetryConnectionAttemptAfterConnectionAttemptWasBroken() {
 
         when(clientMock.connectToNodeAsync(eq(StringCodec.UTF8), eq("localhost:2"), any(), any()))
-                .thenReturn(
-                ConnectionFuture.from(socketAddressMock, CompletableFuture.completedFuture(nodeConnectionMock)));
+                .thenReturn(ConnectionFuture.from(socketAddressMock, CompletableFuture.completedFuture(nodeConnectionMock)));
 
         AsyncCommand<String, String, String> async = new AsyncCommand<>(new Command<>(CommandType.READONLY, null, null));
         async.completeExceptionally(new RuntimeException());
@@ -289,19 +287,17 @@ class PooledClusterConnectionProviderUnitTests {
         failed.completeExceptionally(new IllegalStateException());
 
         when(clientMock.connectToNodeAsync(eq(StringCodec.UTF8), eq("localhost:1"), any(), any()))
-                .thenReturn(
-                ConnectionFuture.from(socketAddressMock, failed));
+                .thenReturn(ConnectionFuture.from(socketAddressMock, failed));
 
         when(clientMock.connectToNodeAsync(eq(StringCodec.UTF8), eq("localhost:2"), any(), any()))
-                .thenReturn(
-                ConnectionFuture.from(socketAddressMock, CompletableFuture.completedFuture(nodeConnectionMock)));
+                .thenReturn(ConnectionFuture.from(socketAddressMock, CompletableFuture.completedFuture(nodeConnectionMock)));
 
         AsyncCommand<String, String, String> async = new AsyncCommand<>(new Command<>(CommandType.READONLY, null, null));
         async.complete("OK");
 
         when(asyncCommandsMock.readOnly()).thenReturn(async);
 
-        sut.setReadFrom(ReadFrom.MASTER_PREFERRED);
+        sut.setReadFrom(ReadFrom.UPSTREAM_PREFERRED);
 
         assertThat(sut.getConnection(Intent.READ, 1)).isNotNull().isSameAs(nodeConnectionMock);
 
@@ -322,24 +318,22 @@ class PooledClusterConnectionProviderUnitTests {
         failed2.completeExceptionally(new IllegalStateException());
 
         when(clientMock.connectToNodeAsync(eq(StringCodec.UTF8), eq("localhost:1"), any(), any()))
-                .thenReturn(
-                ConnectionFuture.from(socketAddressMock, failed2));
+                .thenReturn(ConnectionFuture.from(socketAddressMock, failed2));
 
         when(clientMock.connectToNodeAsync(eq(StringCodec.UTF8), eq("localhost:2"), any(), any()))
-                .thenReturn(
-                ConnectionFuture.from(socketAddressMock, failed2));
+                .thenReturn(ConnectionFuture.from(socketAddressMock, failed2));
 
         AsyncCommand<String, String, String> async = new AsyncCommand<>(new Command<>(CommandType.READONLY, null, null));
         async.complete("OK");
 
-        sut.setReadFrom(ReadFrom.MASTER_PREFERRED);
+        sut.setReadFrom(ReadFrom.UPSTREAM_PREFERRED);
 
         try {
             sut.getConnection(Intent.READ, 1);
             fail("Missing RedisException");
         } catch (RedisException e) {
-            assertThat(e).hasCauseInstanceOf(RedisConnectionException.class).hasRootCauseExactlyInstanceOf(
-                    IllegalStateException.class);
+            assertThat(e).isInstanceOf(RedisConnectionException.class)
+                    .hasRootCauseExactlyInstanceOf(IllegalStateException.class);
         }
 
         verify(clientMock).connectToNodeAsync(eq(StringCodec.UTF8), eq("localhost:1"), any(), any());
@@ -387,8 +381,7 @@ class PooledClusterConnectionProviderUnitTests {
         when(channelHandlerMock.closeAsync()).thenReturn(CompletableFuture.completedFuture(null));
 
         when(clientMock.connectToNodeAsync(eq(StringCodec.UTF8), eq("localhost:1"), any(), any()))
-                .thenReturn(
-                ConnectionFuture.from(socketAddressMock, CompletableFuture.completedFuture(nodeConnectionMock)));
+                .thenReturn(ConnectionFuture.from(socketAddressMock, CompletableFuture.completedFuture(nodeConnectionMock)));
 
         StatefulRedisConnection<String, String> connection = sut.getConnection(Intent.READ, 1);
         assertThat(connection).isNotNull();
@@ -409,8 +402,8 @@ class PooledClusterConnectionProviderUnitTests {
     @Test
     void shouldRejectConnectionsToUnknownNodeHostAndPort() {
 
-        assertThatThrownBy(() -> sut.getConnection(Intent.READ, "localhost", 1234)).isInstanceOf(
-                UnknownPartitionException.class);
+        assertThatThrownBy(() -> sut.getConnection(Intent.READ, "localhost", 1234))
+                .isInstanceOf(UnknownPartitionException.class);
 
         verify(clusterEventListener).onUnknownNode();
     }

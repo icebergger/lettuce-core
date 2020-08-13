@@ -32,19 +32,20 @@ import io.lettuce.core.protocol.ProtocolKeyword;
 public class CommandSegments implements Iterable<CommandSegment> {
 
     private final ProtocolKeyword commandType;
+
     private final List<CommandSegment> segments;
 
     /**
      * Create {@link CommandSegments} given a {@link List} of {@link CommandSegment}s.
      *
-     * @param segments must not be {@literal null.}
+     * @param segments must not be {@code null.}
      */
     public CommandSegments(List<CommandSegment> segments) {
 
         LettuceAssert.isTrue(!segments.isEmpty(), "Command segments must not be empty");
 
-        this.segments = segments.size() > 1 ? Collections.unmodifiableList(segments.subList(1, segments.size())) : Collections
-                .emptyList();
+        this.segments = segments.size() > 1 ? Collections.unmodifiableList(segments.subList(1, segments.size()))
+                : Collections.emptyList();
         this.commandType = potentiallyResolveCommand(segments.get(0).asString());
     }
 
@@ -52,7 +53,7 @@ public class CommandSegments implements Iterable<CommandSegment> {
      * Attempt to resolve the {@code commandType} against {@link CommandType}. This allows reuse of settings associated with the
      * actual command type such as read-write routing. Subclasses may override this method.
      *
-     * @param commandType must not be {@literal null}.
+     * @param commandType must not be {@code null}.
      * @return the resolved {@link ProtocolKeyword}.
      * @since 5.0.5
      */
@@ -81,6 +82,7 @@ public class CommandSegments implements Iterable<CommandSegment> {
     static class StringCommandType implements ProtocolKeyword {
 
         private final byte[] commandTypeBytes;
+
         private final String commandType;
 
         StringCommandType(String commandType) {
@@ -102,6 +104,24 @@ public class CommandSegments implements Iterable<CommandSegment> {
         public String toString() {
             return name();
         }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o)
+                return true;
+            if (!(o instanceof StringCommandType))
+                return false;
+
+            StringCommandType that = (StringCommandType) o;
+
+            return commandType.equals(that.commandType);
+        }
+
+        @Override
+        public int hashCode() {
+            return commandType.hashCode();
+        }
+
     }
 
     @Override
@@ -115,4 +135,5 @@ public class CommandSegments implements Iterable<CommandSegment> {
 
         return sb.toString();
     }
+
 }

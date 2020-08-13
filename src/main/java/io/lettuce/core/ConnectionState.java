@@ -15,6 +15,8 @@
  */
 package io.lettuce.core;
 
+import java.util.List;
+
 import io.lettuce.core.protocol.ProtocolVersion;
 
 /**
@@ -29,9 +31,13 @@ public class ConnectionState {
     private volatile HandshakeResponse handshakeResponse;
 
     private volatile String username;
+
     private volatile char[] password;
+
     private volatile int db;
+
     private volatile boolean readOnly;
+
     private volatile String clientName;
 
     /**
@@ -58,7 +64,7 @@ public class ConnectionState {
     /**
      * Returns the client connection id. Only available when using {@link ProtocolVersion#RESP3}.
      *
-     * @return the client connection id. Can be {@literal null} if Redis uses RESP2.
+     * @return the client connection id. Can be {@code null} if Redis uses RESP2.
      */
     public Long getConnectionId() {
         return handshakeResponse != null ? handshakeResponse.getConnectionId() : null;
@@ -95,7 +101,27 @@ public class ConnectionState {
         this.handshakeResponse = handshakeResponse;
     }
 
-    void setUsername(String username) {
+    /**
+     * Sets username/password state based on the argument count from an {@code AUTH} command.
+     *
+     * @param args
+     */
+    protected void setUserNamePassword(List<char[]> args) {
+
+        if (args.isEmpty()) {
+            return;
+        }
+
+        if (args.size() > 1) {
+            setUsername(new String(args.get(0)));
+            setPassword(args.get(1));
+        } else {
+            setUsername(null);
+            setPassword(args.get(0));
+        }
+    }
+
+    protected void setUsername(String username) {
         this.username = username;
     }
 
@@ -113,6 +139,10 @@ public class ConnectionState {
 
     boolean hasPassword() {
         return this.password != null && this.password.length > 0;
+    }
+
+    boolean hasUsername() {
+        return this.username != null && !this.username.isEmpty();
     }
 
     protected void setDb(int db) {
@@ -145,9 +175,13 @@ public class ConnectionState {
     static class HandshakeResponse {
 
         private final ProtocolVersion negotiatedProtocolVersion;
+
         private final Long connectionId;
+
         private final String redisVersion;
+
         private final String mode;
+
         private final String role;
 
         public HandshakeResponse(ProtocolVersion negotiatedProtocolVersion, Long connectionId, String redisVersion, String mode,
@@ -178,5 +212,7 @@ public class ConnectionState {
         public String getRole() {
             return role;
         }
+
     }
+
 }

@@ -23,10 +23,11 @@ import java.net.UnknownHostException;
  * This class provides settings used while testing. You can override these using system properties.
  *
  * @author Mark Paluch
+ * @author Tugdual Grall
  */
 public class TestSettings {
-    private TestSettings() {
 
+    private TestSettings() {
     }
 
     /**
@@ -77,6 +78,14 @@ public class TestSettings {
 
     /**
      *
+     * @return default username of your redis instance.
+     */
+    public static String username() {
+        return "default";
+    }
+
+    /**
+     *
      * @return password of your redis instance. Defaults to {@literal passwd}. Can be overridden with
      *         {@code -Dpassword=YourPassword}
      */
@@ -86,10 +95,28 @@ public class TestSettings {
 
     /**
      *
+     * @return password of a second user your redis instance. Defaults to {@literal lettuceTest}. Can be overridden with
+     *         {@code -Dacl.username=SampleUsername}
+     */
+    public static String aclUsername() {
+        return System.getProperty("acl.username", "lettuceTest");
+    }
+
+    /**
+     *
+     * @return password of a second user of your redis instance. Defaults to {@literal lettuceTestPasswd}. Can be overridden
+     *         with {@code -Dacl.password=SamplePassword}
+     */
+    public static String aclPassword() {
+        return System.getProperty("acl.password", "lettuceTestPasswd");
+    }
+
+    /**
+     *
      * @return port of your redis instance. Defaults to {@literal 6479}. Can be overriden with {@code -Dport=1234}
      */
     public static int port() {
-        return Integer.valueOf(System.getProperty("port", "6479"));
+        return Integer.parseInt(System.getProperty("port", "6479"));
     }
 
     /**
@@ -97,7 +124,7 @@ public class TestSettings {
      * @return sslport of your redis instance. Defaults to {@literal 6443}. Can be overriden with {@code -Dsslport=1234}
      */
     public static int sslPort() {
-        return Integer.valueOf(System.getProperty("sslport", "6443"));
+        return Integer.parseInt(System.getProperty("sslport", "6443"));
     }
 
     /**

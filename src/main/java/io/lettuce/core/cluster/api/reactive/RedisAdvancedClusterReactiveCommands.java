@@ -32,6 +32,7 @@ import io.lettuce.core.output.KeyStreamingChannel;
  * Advanced reactive and thread-safe Redis Cluster API.
  *
  * @author Mark Paluch
+ * @author Jon Chambers
  * @since 5.0
  */
 public interface RedisAdvancedClusterReactiveCommands<K, V> extends RedisClusterReactiveCommands<K, V> {
@@ -141,6 +142,15 @@ public interface RedisAdvancedClusterReactiveCommands<K, V> extends RedisCluster
     Mono<String> flushall();
 
     /**
+     * Remove all keys asynchronously from all databases on all cluster upstream nodes with pipelining.
+     *
+     * @return String simple-string-reply
+     * @see RedisServerReactiveCommands#flushallAsync()
+     * @since 6.0
+     */
+    Mono<String> flushallAsync();
+
+    /**
      * Remove all keys from the current database on all cluster masters with pipelining.
      *
      * @return String simple-string-reply
@@ -178,10 +188,10 @@ public interface RedisAdvancedClusterReactiveCommands<K, V> extends RedisCluster
     /**
      * Return a random key from the keyspace on a random master.
      *
-     * @return V bulk-string-reply the random key, or {@literal null} when the database is empty.
+     * @return K bulk-string-reply the random key, or a {@link Mono} that completes empty when the database is empty.
      * @see RedisKeyReactiveCommands#randomkey()
      */
-    Mono<V> randomkey();
+    Mono<K> randomkey();
 
     /**
      * Remove all the scripts from the script cache on all cluster nodes.
@@ -204,13 +214,23 @@ public interface RedisAdvancedClusterReactiveCommands<K, V> extends RedisCluster
      *
      * @param script script content
      * @return String bulk-string-reply This command returns the SHA1 digest of the script added into the script cache.
+     * @since 6.0
      */
-    Mono<String> scriptLoad(V script);
+    Mono<String> scriptLoad(String script);
+
+    /**
+     * Load the specified Lua script into the script cache on all cluster nodes.
+     *
+     * @param script script content
+     * @return String bulk-string-reply This command returns the SHA1 digest of the script added into the script cache.
+     * @since 6.0
+     */
+    Mono<String> scriptLoad(byte[] script);
 
     /**
      * Synchronously save the dataset to disk and then shut down all nodes of the cluster.
      *
-     * @param save {@literal true} force save operation
+     * @param save {@code true} force save operation
      * @see RedisServerReactiveCommands#shutdown(boolean)
      */
     Mono<Void> shutdown(boolean save);

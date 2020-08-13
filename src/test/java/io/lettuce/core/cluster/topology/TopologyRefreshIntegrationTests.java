@@ -32,7 +32,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.springframework.test.util.ReflectionTestUtils;
+import io.lettuce.test.ReflectionTestUtils;
 
 import io.lettuce.category.SlowTests;
 import io.lettuce.core.RedisClient;
@@ -92,36 +92,6 @@ class TopologyRefreshIntegrationTests extends TestSupport {
         redis1.getStatefulConnection().close();
         redis2.getStatefulConnection().close();
         FastShutdown.shutdown(clusterClient);
-    }
-
-    @Test
-    void shouldUnsubscribeTopologyRefresh() {
-
-        ClusterTopologyRefreshOptions topologyRefreshOptions = ClusterTopologyRefreshOptions.builder()
-                .enablePeriodicRefresh(true) //
-                .build();
-        clusterClient.setOptions(ClusterClientOptions.builder().topologyRefreshOptions(topologyRefreshOptions).build());
-
-        RedisAdvancedClusterAsyncCommands<String, String> clusterConnection = clusterClient.connect().async();
-
-        AtomicBoolean clusterTopologyRefreshActivated = (AtomicBoolean) ReflectionTestUtils.getField(clusterClient,
-                "clusterTopologyRefreshActivated");
-
-        AtomicReference<ScheduledFuture<?>> clusterTopologyRefreshFuture = (AtomicReference) ReflectionTestUtils.getField(
-                clusterClient, "clusterTopologyRefreshFuture");
-
-        assertThat(clusterTopologyRefreshActivated.get()).isTrue();
-        assertThat((Future) clusterTopologyRefreshFuture.get()).isNotNull();
-
-        ScheduledFuture<?> scheduledFuture = clusterTopologyRefreshFuture.get();
-
-        clusterConnection.getStatefulConnection().close();
-
-        FastShutdown.shutdown(clusterClient);
-
-        assertThat(clusterTopologyRefreshActivated.get()).isFalse();
-        assertThat((Future) clusterTopologyRefreshFuture.get()).isNull();
-        assertThat(scheduledFuture.isCancelled()).isTrue();
     }
 
     @Test

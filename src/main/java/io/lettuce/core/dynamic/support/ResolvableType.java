@@ -19,7 +19,7 @@ import java.io.Serializable;
 import java.lang.reflect.*;
 import java.util.*;
 
-import io.lettuce.core.LettuceStrings;
+import io.lettuce.core.internal.LettuceStrings;
 import io.lettuce.core.dynamic.support.TypeWrapper.MethodParameterTypeProvider;
 import io.lettuce.core.dynamic.support.TypeWrapper.TypeProvider;
 import io.lettuce.core.internal.LettuceAssert;
@@ -848,10 +848,12 @@ public class ResolvableType implements Serializable {
      */
     public static ResolvableType forRawClass(Class<?> sourceClass) {
         return new ResolvableType(sourceClass) {
+
             @Override
             public boolean isAssignableFrom(Class<?> other) {
                 return LettuceClassUtils.isAssignable(getRawClass(), other);
             }
+
         };
     }
 
@@ -1135,6 +1137,7 @@ public class ResolvableType implements Serializable {
          * @return the resolved variable, or {@code null} if not found
          */
         ResolvableType resolveVariable(TypeVariable<?> variable);
+
     }
 
     @SuppressWarnings("serial")
@@ -1149,6 +1152,7 @@ public class ResolvableType implements Serializable {
         public Object getSource() {
             return ResolvableType.this;
         }
+
     }
 
     @SuppressWarnings("serial")
@@ -1177,6 +1181,7 @@ public class ResolvableType implements Serializable {
         public Object getSource() {
             return this.generics;
         }
+
     }
 
     private static final class SyntheticParameterizedType implements ParameterizedType, Serializable {
@@ -1222,6 +1227,7 @@ public class ResolvableType implements Serializable {
         public int hashCode() {
             return (this.rawType.hashCode() * 31 + Arrays.hashCode(this.typeArguments));
         }
+
     }
 
     /**
@@ -1311,6 +1317,7 @@ public class ResolvableType implements Serializable {
         enum Kind {
             UPPER, LOWER
         }
+
     }
 
     /**

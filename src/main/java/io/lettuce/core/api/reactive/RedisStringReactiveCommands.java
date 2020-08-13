@@ -19,10 +19,7 @@ import java.util.Map;
 
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import io.lettuce.core.BitFieldArgs;
-import io.lettuce.core.KeyValue;
-import io.lettuce.core.SetArgs;
-import io.lettuce.core.Value;
+import io.lettuce.core.*;
 import io.lettuce.core.output.KeyValueStreamingChannel;
 
 /**
@@ -69,7 +66,7 @@ public interface RedisStringReactiveCommands<K, V> {
      * Execute {@code BITFIELD} with its subcommands.
      *
      * @param key the key
-     * @param bitFieldArgs the args containing subcommands, must not be {@literal null}.
+     * @param bitFieldArgs the args containing subcommands, must not be {@code null}.
      *
      * @return Long bulk-reply the results from the bitfield commands.
      */
@@ -202,7 +199,7 @@ public interface RedisStringReactiveCommands<K, V> {
      * Get the value of a key.
      *
      * @param key the key
-     * @return V bulk-string-reply the value of {@code key}, or {@literal null} when {@code key} does not exist.
+     * @return V bulk-string-reply the value of {@code key}, or {@code null} when {@code key} does not exist.
      */
     Mono<V> get(K key);
 
@@ -230,7 +227,7 @@ public interface RedisStringReactiveCommands<K, V> {
      *
      * @param key the key
      * @param value the value
-     * @return V bulk-string-reply the old value stored at {@code key}, or {@literal null} when {@code key} did not exist.
+     * @return V bulk-string-reply the old value stored at {@code key}, or {@code null} when {@code key} did not exist.
      */
     Mono<V> getset(K key, V value);
 
@@ -369,10 +366,30 @@ public interface RedisStringReactiveCommands<K, V> {
     Mono<Long> setrange(K key, long offset, V value);
 
     /**
+     * The STRALGO command implements complex algorithms that operate on strings. This method uses the LCS algorithm (longest
+     * common substring).
+     *
+     * <ul>
+     * <li>Without modifiers the string representing the longest common substring is returned.</li>
+     * <li>When {@link StrAlgoArgs#justLen() LEN} is given the command returns the length of the longest common substring.</li>
+     * <li>When {@link StrAlgoArgs#withIdx() IDX} is given the command returns an array with the LCS length and all the ranges
+     * in both the strings, start and end offset for each string, where there are matches. When
+     * {@link StrAlgoArgs#withMatchLen() WITHMATCHLEN} is given each array representing a match will also have the length of the
+     * match.</li>
+     * </ul>
+     *
+     * @param strAlgoArgs command arguments.
+     * @return StringMatchResult
+     * @since 6.0
+     */
+    Mono<StringMatchResult> stralgoLcs(StrAlgoArgs strAlgoArgs);
+
+    /**
      * Get the length of the value stored in a key.
      *
      * @param key the key
      * @return Long integer-reply the length of the string at {@code key}, or {@code 0} when {@code key} does not exist.
      */
     Mono<Long> strlen(K key);
+
 }

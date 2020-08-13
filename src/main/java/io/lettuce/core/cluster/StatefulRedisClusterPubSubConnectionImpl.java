@@ -18,12 +18,11 @@ package io.lettuce.core.cluster;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
-import io.lettuce.core.AbstractRedisClient;
-import io.lettuce.core.RedisChannelWriter;
-import io.lettuce.core.RedisException;
-import io.lettuce.core.RedisURI;
+import io.lettuce.core.*;
+import io.lettuce.core.cluster.api.push.RedisClusterPushListener;
 import io.lettuce.core.cluster.models.partitions.Partitions;
 import io.lettuce.core.cluster.models.partitions.RedisClusterNode;
 import io.lettuce.core.cluster.pubsub.RedisClusterPubSubListener;
@@ -34,6 +33,7 @@ import io.lettuce.core.cluster.pubsub.api.sync.NodeSelectionPubSubCommands;
 import io.lettuce.core.cluster.pubsub.api.sync.PubSubNodeSelection;
 import io.lettuce.core.cluster.pubsub.api.sync.RedisClusterPubSubCommands;
 import io.lettuce.core.codec.RedisCodec;
+import io.lettuce.core.internal.LettuceAssert;
 import io.lettuce.core.pubsub.RedisPubSubAsyncCommandsImpl;
 import io.lettuce.core.pubsub.RedisPubSubReactiveCommandsImpl;
 import io.lettuce.core.pubsub.StatefulRedisPubSubConnection;
@@ -44,26 +44,34 @@ import io.lettuce.core.pubsub.api.sync.RedisPubSubCommands;
 /**
  * @author Mark Paluch
  */
-class StatefulRedisClusterPubSubConnectionImpl<K, V> extends StatefulRedisPubSubConnectionImpl<K, V> implements
-        StatefulRedisClusterPubSubConnection<K, V> {
+class StatefulRedisClusterPubSubConnectionImpl<K, V> extends StatefulRedisPubSubConnectionImpl<K, V>
+        implements StatefulRedisClusterPubSubConnection<K, V> {
 
     private final PubSubClusterEndpoint<K, V> endpoint;
+
+    private final ClusterPushHandler clusterPushHandler;
+
     private volatile Partitions partitions;
+
     private volatile CommandSet commandSet;
+
+    private volatile String nodeId;
 
     /**
      * Initialize a new connection.
      *
-     * @param writer the channel writer
+     * @param endpoint the channel writer.
+     * @param clusterPushHandler the cluster push message handler.
      * @param codec Codec used to encode/decode keys and values.
      * @param timeout Maximum time to wait for a response.
      */
-    public StatefulRedisClusterPubSubConnectionImpl(PubSubClusterEndpoint<K, V> endpoint, RedisChannelWriter writer,
-            RedisCodec<K, V> codec, Duration timeout) {
+    public StatefulRedisClusterPubSubConnectionImpl(PubSubClusterEndpoint<K, V> endpoint, ClusterPushHandler clusterPushHandler,
+            RedisChannelWriter writer, RedisCodec<K, V> codec, Duration timeout) {
 
         super(endpoint, writer, codec, timeout);
 
         this.endpoint = endpoint;
+        this.clusterPushHandler = clusterPushHandler;
     }
 
     @Override
@@ -85,8 +93,8 @@ class StatefulRedisClusterPubSubConnectionImpl<K, V> extends StatefulRedisPubSub
     @Override
     protected RedisPubSubCommands<K, V> newRedisSyncCommandsImpl() {
 
-        return (RedisPubSubCommands) Proxy.newProxyInstance(AbstractRedisClient.class.getClassLoader(), new Class<?>[] {
-                RedisClusterPubSubCommands.class, RedisPubSubCommands.class }, syncInvocationHandler());
+        return (RedisPubSubCommands) Proxy.newProxyInstance(AbstractRedisClient.class.getClassLoader(),
+                new Class<?>[] { RedisClusterPubSubCommands.class, RedisPubSubCommands.class }, syncInvocationHandler());
     }
 
     private InvocationHandler syncInvocationHandler() {
@@ -113,9 +121,11 @@ class StatefulRedisClusterPubSubConnectionImpl<K, V> extends StatefulRedisPubSub
     }
 
     @Override
-    public void activated() {
-        super.activated();
+    protected List<RedisFuture<Void>> resubscribe() {
+
         async().clusterMyId().thenAccept(nodeId -> endpoint.setClusterNode(partitions.getPartitionByNodeId(nodeId)));
+
+        return super.resubscribe();
     }
 
     @Override
@@ -163,9 +173,36 @@ class StatefulRedisClusterPubSubConnectionImpl<K, V> extends StatefulRedisPubSub
         return (CompletableFuture) provider.getConnectionAsync(ClusterConnectionProvider.Intent.WRITE, host, port);
     }
 
+    @Override
+    public void activated() {
+        super.activated();
+
+        async.clusterMyId().thenAccept(this::setNodeId);
+    }
+
     public void setPartitions(Partitions partitions) {
+
+        LettuceAssert.notNull(partitions, "Partitions must not be null");
+
         this.partitions = partitions;
+
+        String nodeId = getNodeId();
+        if (nodeId != null && expireStaleConnections()) {
+
+            if (partitions.getPartitionByNodeId(nodeId) == null) {
+                endpoint.disconnect();
+            }
+        }
+
         getClusterDistributionChannelWriter().setPartitions(partitions);
+    }
+
+    private String getNodeId() {
+        return this.nodeId;
+    }
+
+    private void setNodeId(String nodeId) {
+        this.nodeId = nodeId;
     }
 
     public Partitions getPartitions() {
@@ -180,7 +217,7 @@ class StatefulRedisClusterPubSubConnectionImpl<K, V> extends StatefulRedisPubSub
     /**
      * Add a new {@link RedisClusterPubSubListener listener}.
      *
-     * @param listener the listener, must not be {@literal null}.
+     * @param listener the listener, must not be {@code null}.
      */
     @Override
     public void addListener(RedisClusterPubSubListener<K, V> listener) {
@@ -190,15 +227,21 @@ class StatefulRedisClusterPubSubConnectionImpl<K, V> extends StatefulRedisPubSub
     /**
      * Remove an existing {@link RedisClusterPubSubListener listener}.
      *
-     * @param listener the listener, must not be {@literal null}.
+     * @param listener the listener, must not be {@code null}.
      */
     @Override
     public void removeListener(RedisClusterPubSubListener<K, V> listener) {
         endpoint.removeListener(listener);
     }
 
-    RedisClusterPubSubListener<K, V> getUpstreamListener() {
-        return endpoint.getUpstreamListener();
+    @Override
+    public void addListener(RedisClusterPushListener listener) {
+        clusterPushHandler.addListener(listener);
+    }
+
+    @Override
+    public void removeListener(RedisClusterPushListener listener) {
+        clusterPushHandler.removeListener(listener);
     }
 
     protected ClusterDistributionChannelWriter getClusterDistributionChannelWriter() {
@@ -214,4 +257,17 @@ class StatefulRedisClusterPubSubConnectionImpl<K, V> extends StatefulRedisPubSub
         }
         return null;
     }
+
+    private boolean expireStaleConnections() {
+
+        ClusterClientOptions options = getClusterClientOptions();
+        return options == null || options.isCloseStaleConnections();
+    }
+
+    private ClusterClientOptions getClusterClientOptions() {
+
+        ClientOptions options = getOptions();
+        return options instanceof ClusterClientOptions ? (ClusterClientOptions) options : null;
+    }
+
 }

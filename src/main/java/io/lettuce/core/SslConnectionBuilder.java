@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.security.GeneralSecurityException;
+import java.time.Duration;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -42,6 +43,7 @@ import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
  *
  * @author Mark Paluch
  * @author Amin Mohtashami
+ * @author Felipe Ruiz
  */
 public class SslConnectionBuilder extends ConnectionBuilder {
 
@@ -85,10 +87,15 @@ public class SslConnectionBuilder extends ConnectionBuilder {
     static class SslChannelInitializer extends io.netty.channel.ChannelInitializer<Channel> {
 
         private final Supplier<List<ChannelHandler>> handlers;
+
         private final HostAndPort hostAndPort;
+
         private final boolean verifyPeer;
+
         private final boolean startTls;
+
         private final ClientResources clientResources;
+
         private final SslOptions sslOptions;
 
         public SslChannelInitializer(Supplier<List<ChannelHandler>> handlers, HostAndPort hostAndPort, boolean verifyPeer,
@@ -107,6 +114,9 @@ public class SslConnectionBuilder extends ConnectionBuilder {
 
             SSLEngine sslEngine = initializeSSLEngine(channel.alloc());
             SslHandler sslHandler = new SslHandler(sslEngine, startTls);
+            Duration sslHandshakeTimeout = sslOptions.getHandshakeTimeout();
+            sslHandler.setHandshakeTimeoutMillis(sslHandshakeTimeout.toMillis());
+
             channel.pipeline().addLast(sslHandler);
 
             for (ChannelHandler handler : handlers.get()) {
@@ -136,5 +146,7 @@ public class SslConnectionBuilder extends ConnectionBuilder {
 
             return sslEngine;
         }
+
     }
+
 }

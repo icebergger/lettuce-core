@@ -33,24 +33,25 @@ import io.lettuce.core.protocol.RedisCommand;
 public class TimeoutProvider {
 
     private final Supplier<TimeoutOptions> timeoutOptionsSupplier;
+
     private final LongSupplier defaultTimeoutSupplier;
 
     private State state;
 
     /**
      * Creates a new {@link TimeoutProvider} given {@link TimeoutOptions supplier} and {@link LongSupplier default timeout
-     * supplier}.
+     * supplier in nano seconds}.
      *
-     * @param timeoutOptionsSupplier must not be {@literal null}.
-     * @param defaultTimeoutSupplier must not be {@literal null}.
+     * @param timeoutOptionsSupplier must not be {@code null}.
+     * @param defaultTimeoutNsSupplier must not be {@code null}.
      */
-    public TimeoutProvider(Supplier<TimeoutOptions> timeoutOptionsSupplier, LongSupplier defaultTimeoutSupplier) {
+    public TimeoutProvider(Supplier<TimeoutOptions> timeoutOptionsSupplier, LongSupplier defaultTimeoutNsSupplier) {
 
         LettuceAssert.notNull(timeoutOptionsSupplier, "TimeoutOptionsSupplier must not be null");
-        LettuceAssert.notNull(defaultTimeoutSupplier, "Default TimeoutSupplier must not be null");
+        LettuceAssert.notNull(defaultTimeoutNsSupplier, "Default TimeoutSupplier must not be null");
 
         this.timeoutOptionsSupplier = timeoutOptionsSupplier;
-        this.defaultTimeoutSupplier = defaultTimeoutSupplier;
+        this.defaultTimeoutSupplier = defaultTimeoutNsSupplier;
     }
 
     /**
@@ -72,12 +73,13 @@ public class TimeoutProvider {
             timeoutNs = state.timeoutSource.getTimeUnit().toNanos(state.timeoutSource.getTimeout(command));
         }
 
-        return timeoutNs > 0 ? timeoutNs : defaultTimeoutSupplier.getAsLong();
+        return timeoutNs >= 0 ? timeoutNs : defaultTimeoutSupplier.getAsLong();
     }
 
     static class State {
 
         final boolean applyDefaultTimeout;
+
         final TimeoutOptions.TimeoutSource timeoutSource;
 
         State(TimeoutOptions timeoutOptions) {
@@ -90,5 +92,7 @@ public class TimeoutProvider {
                 this.applyDefaultTimeout = false;
             }
         }
+
     }
+
 }

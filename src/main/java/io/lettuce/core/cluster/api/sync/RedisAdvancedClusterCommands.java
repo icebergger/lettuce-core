@@ -34,6 +34,7 @@ import io.lettuce.core.output.KeyStreamingChannel;
  * Advanced synchronous and thread-safe Redis Cluster API.
  *
  * @author Mark Paluch
+ * @author Jon Chambers
  * @since 4.0
  */
 public interface RedisAdvancedClusterCommands<K, V> extends RedisClusterCommands<K, V> {
@@ -65,12 +66,23 @@ public interface RedisAdvancedClusterCommands<K, V> extends RedisClusterCommands
     StatefulRedisClusterConnection<K, V> getStatefulConnection();
 
     /**
-     * Select all masters.
+     * Select all upstream nodes.
      *
-     * @return API with synchronous executed commands on a selection of master cluster nodes.
+     * @return API with synchronous executed commands on a selection of upstream cluster nodes.
+     * @deprecated since 6.0 in favor of {@link #upstream()}.
      */
+    @Deprecated
     default NodeSelection<K, V> masters() {
-        return nodes(redisClusterNode -> redisClusterNode.is(RedisClusterNode.NodeFlag.MASTER));
+        return nodes(redisClusterNode -> redisClusterNode.is(RedisClusterNode.NodeFlag.UPSTREAM));
+    }
+
+    /**
+     * Select all upstream nodes.
+     *
+     * @return API with synchronous executed commands on a selection of upstream cluster nodes.
+     */
+    default NodeSelection<K, V> upstream() {
+        return nodes(redisClusterNode -> redisClusterNode.is(RedisClusterNode.NodeFlag.UPSTREAM));
     }
 
     /**
@@ -93,8 +105,8 @@ public interface RedisAdvancedClusterCommands<K, V> extends RedisClusterCommands
      */
     @Deprecated
     default NodeSelection<K, V> slaves(Predicate<RedisClusterNode> predicate) {
-        return readonly(redisClusterNode -> predicate.test(redisClusterNode)
-                && redisClusterNode.is(RedisClusterNode.NodeFlag.SLAVE));
+        return readonly(
+                redisClusterNode -> predicate.test(redisClusterNode) && redisClusterNode.is(RedisClusterNode.NodeFlag.SLAVE));
     }
 
     /**
@@ -115,8 +127,8 @@ public interface RedisAdvancedClusterCommands<K, V> extends RedisClusterCommands
      * @since 5.2
      */
     default NodeSelection<K, V> replicas(Predicate<RedisClusterNode> predicate) {
-        return readonly(redisClusterNode -> predicate.test(redisClusterNode)
-                && redisClusterNode.is(RedisClusterNode.NodeFlag.REPLICA));
+        return readonly(
+                redisClusterNode -> predicate.test(redisClusterNode) && redisClusterNode.is(RedisClusterNode.NodeFlag.REPLICA));
     }
 
     /**
@@ -225,7 +237,7 @@ public interface RedisAdvancedClusterCommands<K, V> extends RedisClusterCommands
     String clientSetname(K name);
 
     /**
-     * Remove all keys from all databases on all cluster masters with pipelining.
+     * Remove all keys from all databases on all cluster upstream nodes with pipelining.
      *
      * @return String simple-string-reply
      * @see RedisServerCommands#flushall()
@@ -233,7 +245,16 @@ public interface RedisAdvancedClusterCommands<K, V> extends RedisClusterCommands
     String flushall();
 
     /**
-     * Remove all keys from the current database on all cluster masters with pipelining.
+     * Remove all keys asynchronously from all databases on all cluster upstream nodes with pipelining.
+     *
+     * @return String simple-string-reply
+     * @see RedisServerCommands#flushallAsync()
+     * @since 6.0
+     */
+    String flushallAsync();
+
+    /**
+     * Remove all keys from the current database on all cluster upstream nodes with pipelining.
      *
      * @return String simple-string-reply
      * @see RedisServerCommands#flushdb()
@@ -241,7 +262,7 @@ public interface RedisAdvancedClusterCommands<K, V> extends RedisClusterCommands
     String flushdb();
 
     /**
-     * Return the number of keys in the selected database on all cluster masters.
+     * Return the number of keys in the selected database on all cluster upstream nodes.
      *
      * @return Long integer-reply
      * @see RedisServerCommands#dbsize()
@@ -249,7 +270,7 @@ public interface RedisAdvancedClusterCommands<K, V> extends RedisClusterCommands
     Long dbsize();
 
     /**
-     * Find all keys matching the given pattern on all cluster masters.
+     * Find all keys matching the given pattern on all cluster upstream nodes.
      *
      * @param pattern the pattern type: patternkey (pattern)
      * @return List&lt;K&gt; array-reply list of keys matching {@code pattern}.
@@ -258,7 +279,7 @@ public interface RedisAdvancedClusterCommands<K, V> extends RedisClusterCommands
     List<K> keys(K pattern);
 
     /**
-     * Find all keys matching the given pattern on all cluster masters.
+     * Find all keys matching the given pattern on all cluster upstream nodes.
      *
      * @param channel the channel
      * @param pattern the pattern
@@ -270,10 +291,10 @@ public interface RedisAdvancedClusterCommands<K, V> extends RedisClusterCommands
     /**
      * Return a random key from the keyspace on a random master.
      *
-     * @return V bulk-string-reply the random key, or {@literal null} when the database is empty.
+     * @return K bulk-string-reply the random key, or {@code null} when the database is empty.
      * @see RedisKeyCommands#randomkey()
      */
-    V randomkey();
+    K randomkey();
 
     /**
      * Remove all the scripts from the script cache on all cluster nodes.
@@ -294,7 +315,7 @@ public interface RedisAdvancedClusterCommands<K, V> extends RedisClusterCommands
     /**
      * Synchronously save the dataset to disk and then shut down all nodes of the cluster.
      *
-     * @param save {@literal true} force save operation
+     * @param save {@code true} force save operation
      * @see RedisServerCommands#shutdown(boolean)
      */
     void shutdown(boolean save);
@@ -387,4 +408,5 @@ public interface RedisAdvancedClusterCommands<K, V> extends RedisClusterCommands
      * @return Long integer-reply the number of found keys.
      */
     Long touch(K... keys);
+
 }

@@ -44,7 +44,8 @@ public class TopologyComparators {
      * @return List containing {@link RedisClusterNode}s ordered by {@code fixedOrder} and {@link RedisURI}
      * @see #sortByUri(Iterable)
      */
-    public static List<RedisClusterNode> predefinedSort(Iterable<RedisClusterNode> clusterNodes, Iterable<RedisURI> fixedOrder) {
+    public static List<RedisClusterNode> predefinedSort(Iterable<RedisClusterNode> clusterNodes,
+            Iterable<RedisURI> fixedOrder) {
 
         LettuceAssert.notNull(clusterNodes, "Cluster nodes must not be null");
         LettuceAssert.notNull(fixedOrder, "Fixed order must not be null");
@@ -60,8 +61,8 @@ public class TopologyComparators {
                 .filter(redisClusterNode -> !fixedOrderList.contains(redisClusterNode.getUri()))//
                 .collect(Collectors.toList());
 
-        Collections.sort(withOrderSpecification, new PredefinedRedisClusterNodeComparator(fixedOrderList));
-        Collections.sort(withoutSpecification, (o1, o2) -> RedisURIComparator.INSTANCE.compare(o1.getUri(), o2.getUri()));
+        withOrderSpecification.sort(new PredefinedRedisClusterNodeComparator(fixedOrderList));
+        withoutSpecification.sort((o1, o2) -> RedisURIComparator.INSTANCE.compare(o1.getUri(), o2.getUri()));
 
         withOrderSpecification.addAll(withoutSpecification);
 
@@ -116,7 +117,7 @@ public class TopologyComparators {
      *
      * @param o1 the first object to be compared.
      * @param o2 the second object to be compared.
-     * @return {@literal true} if {@code MASTER} or {@code SLAVE} flags changed or the responsible slots changed.
+     * @return {@code true} if {@code UPSTREAM} or {@code REPLICA} flags changed or the responsible slots changed.
      */
     public static boolean isChanged(Partitions o1, Partitions o2) {
 
@@ -134,11 +135,11 @@ public class TopologyComparators {
     }
 
     /**
-     * Check for {@code MASTER} or {@code SLAVE} flags and whether the responsible slots changed.
+     * Check for {@code UPSTREAM} or {@code REPLICA} flags and whether the responsible slots changed.
      *
      * @param o1 the first object to be compared.
      * @param o2 the second object to be compared.
-     * @return {@literal true} if {@code MASTER} or {@code SLAVE} flags changed or the responsible slots changed.
+     * @return {@code true} if {@code UPSTREAM} or {@code REPLICA} flags changed or the responsible slots changed.
      */
     static boolean essentiallyEqualsTo(RedisClusterNode o1, RedisClusterNode o2) {
 
@@ -146,11 +147,11 @@ public class TopologyComparators {
             return false;
         }
 
-        if (!sameFlags(o1, o2, RedisClusterNode.NodeFlag.MASTER)) {
+        if (!sameFlags(o1, o2, RedisClusterNode.NodeFlag.UPSTREAM)) {
             return false;
         }
 
-        if (!sameFlags(o1, o2, RedisClusterNode.NodeFlag.SLAVE)) {
+        if (!sameFlags(o1, o2, RedisClusterNode.NodeFlag.REPLICA)) {
             return false;
         }
 
@@ -163,14 +164,15 @@ public class TopologyComparators {
 
     private static boolean sameFlags(RedisClusterNode base, RedisClusterNode other, RedisClusterNode.NodeFlag flag) {
 
-        if (base.getFlags().contains(flag)) {
-            return other.getFlags().contains(flag);
+        if (base.is(flag)) {
+            return other.is(flag);
         }
 
-        return !other.getFlags().contains(flag);
+        return !other.is(flag);
     }
 
     static class PredefinedRedisClusterNodeComparator implements Comparator<RedisClusterNode> {
+
         private final List<RedisURI> fixedOrder;
 
         public PredefinedRedisClusterNodeComparator(List<RedisURI> fixedOrder) {
@@ -185,6 +187,7 @@ public class TopologyComparators {
 
             return Integer.compare(index1, index2);
         }
+
     }
 
     /**
@@ -217,6 +220,7 @@ public class TopologyComparators {
 
             return 0;
         }
+
     }
 
     /**
@@ -249,6 +253,7 @@ public class TopologyComparators {
 
             return 0;
         }
+
     }
 
     /**
@@ -273,6 +278,7 @@ public class TopologyComparators {
 
             return h1.compareToIgnoreCase(h2);
         }
+
     }
 
     /**
@@ -287,30 +293,36 @@ public class TopologyComparators {
          * Sort by latency.
          */
         BY_LATENCY {
+
             @Override
             void sort(Partitions partitions) {
                 partitions.getPartitions().sort(TopologyComparators.LatencyComparator.INSTANCE);
             }
+
         },
 
         /**
          * Do not sort.
          */
         NONE {
+
             @Override
             void sort(Partitions partitions) {
 
             }
+
         },
 
         /**
          * Randomize nodes.
          */
         RANDOMIZE {
+
             @Override
             void sort(Partitions partitions) {
                 Collections.shuffle(partitions.getPartitions());
             }
+
         };
 
         abstract void sort(Partitions partitions);
@@ -331,5 +343,7 @@ public class TopologyComparators {
 
             return BY_LATENCY;
         }
+
     }
+
 }

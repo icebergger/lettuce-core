@@ -23,7 +23,7 @@ import io.lettuce.core.cluster.models.partitions.RedisClusterNode;
 import io.lettuce.core.cluster.pubsub.RedisClusterPubSubAdapter;
 import io.lettuce.core.cluster.pubsub.RedisClusterPubSubListener;
 import io.lettuce.core.pubsub.PubSubEndpoint;
-import io.lettuce.core.pubsub.PubSubOutput;
+import io.lettuce.core.pubsub.PubSubMessage;
 import io.lettuce.core.resource.ClientResources;
 
 /**
@@ -32,17 +32,20 @@ import io.lettuce.core.resource.ClientResources;
 public class PubSubClusterEndpoint<K, V> extends PubSubEndpoint<K, V> {
 
     private final List<RedisClusterPubSubListener<K, V>> clusterListeners = new CopyOnWriteArrayList<>();
+
     private final NotifyingMessageListener multicast = new NotifyingMessageListener();
+
     private final UpstreamMessageListener upstream = new UpstreamMessageListener();
 
     private volatile boolean nodeMessagePropagation = false;
+
     private volatile RedisClusterNode clusterNode;
 
     /**
      * Initialize a new instance that handles commands from the supplied queue.
      *
-     * @param clientOptions client options for this connection, must not be {@literal null}
-     * @param clientResources client resources for this connection, must not be {@literal null}.
+     * @param clientOptions client options for this connection, must not be {@code null}
+     * @param clientResources client resources for this connection, must not be {@code null}.
      */
     public PubSubClusterEndpoint(ClientOptions clientOptions, ClientResources clientResources) {
         super(clientOptions, clientResources);
@@ -51,7 +54,7 @@ public class PubSubClusterEndpoint<K, V> extends PubSubEndpoint<K, V> {
     /**
      * Add a new {@link RedisClusterPubSubListener listener}.
      *
-     * @param listener the listener, must not be {@literal null}.
+     * @param listener the listener, must not be {@code null}.
      */
     public void addListener(RedisClusterPubSubListener<K, V> listener) {
         clusterListeners.add(listener);
@@ -64,7 +67,7 @@ public class PubSubClusterEndpoint<K, V> extends PubSubEndpoint<K, V> {
     /**
      * Remove an existing {@link RedisClusterPubSubListener listener}.
      *
-     * @param listener the listener, must not be {@literal null}.
+     * @param listener the listener, must not be {@code null}.
      */
     public void removeListener(RedisClusterPubSubListener<K, V> listener) {
         clusterListeners.remove(listener);
@@ -78,14 +81,15 @@ public class PubSubClusterEndpoint<K, V> extends PubSubEndpoint<K, V> {
         this.clusterNode = clusterNode;
     }
 
-    protected void notifyListeners(PubSubOutput<K, V, V> output) {
+    @Override
+    protected void notifyListeners(PubSubMessage<K, V> output) {
         // update listeners
         switch (output.type()) {
             case message:
-                multicast.message(clusterNode, output.channel(), output.get());
+                multicast.message(clusterNode, output.channel(), output.body());
                 break;
             case pmessage:
-                multicast.message(clusterNode, output.pattern(), output.channel(), output.get());
+                multicast.message(clusterNode, output.pattern(), output.channel(), output.body());
                 break;
             case psubscribe:
                 multicast.psubscribed(clusterNode, output.pattern(), output.count());
@@ -153,6 +157,7 @@ public class PubSubClusterEndpoint<K, V> extends PubSubEndpoint<K, V> {
                 super.punsubscribed(node, pattern, count);
             }
         }
+
     }
 
     private class NotifyingMessageListener extends RedisClusterPubSubAdapter<K, V> {
@@ -198,5 +203,7 @@ public class PubSubClusterEndpoint<K, V> extends PubSubEndpoint<K, V> {
             getListeners().forEach(listener -> listener.punsubscribed(pattern, count));
             clusterListeners.forEach(listener -> listener.punsubscribed(node, pattern, count));
         }
+
     }
+
 }

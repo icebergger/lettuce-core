@@ -31,6 +31,7 @@ import org.junit.jupiter.api.condition.OS;
  * Unit tests for {@link RedisURI.Builder}.
  *
  * @author Mark Paluch
+ * @author Guy Korland
  */
 class RedisURIBuilderUnitTests {
 
@@ -112,15 +113,18 @@ class RedisURIBuilderUnitTests {
     void redisFromUrlNoPassword() {
         RedisURI redisURI = RedisURI.create("redis://localhost:1234/5");
         assertThat(redisURI.getPassword()).isNull();
+        assertThat(redisURI.getUsername()).isNull();
 
         redisURI = RedisURI.create("redis://h:@localhost.com:14589");
         assertThat(redisURI.getPassword()).isNull();
+        assertThat(redisURI.getUsername()).isNull();
     }
 
     @Test
     void redisFromUrlPassword() {
         RedisURI redisURI = RedisURI.create("redis://h:password@localhost.com:14589");
         assertThat(redisURI.getPassword()).isEqualTo("password".toCharArray());
+        assertThat(redisURI.getUsername()).isEqualTo("h");
     }
 
     @Test
@@ -141,6 +145,7 @@ class RedisURIBuilderUnitTests {
         assertThat(result.getHost()).isEqualTo("localhost");
         assertThat(result.getPort()).isEqualTo(RedisURI.DEFAULT_REDIS_PORT);
         assertThat(result.getPassword()).isEqualTo("password".toCharArray());
+        assertThat(result.getUsername()).isNull();
         assertThat(result.isSsl()).isTrue();
     }
 

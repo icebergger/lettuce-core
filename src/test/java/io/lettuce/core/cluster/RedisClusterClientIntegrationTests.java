@@ -396,7 +396,7 @@ class RedisClusterClientIntegrationTests extends TestSupport {
                 RedisURI.Builder.redis(TestSettings.host(), ClusterTestSettings.port7).build());
 
         assertThatThrownBy(clusterClient::getPartitions).isInstanceOf(RedisException.class)
-                .hasRootCauseInstanceOf(RedisCommandExecutionException.class);
+                .hasMessageContaining("Cannot obtain initial Redis Cluster topology");
 
         FastShutdown.shutdown(clusterClient);
     }
@@ -595,7 +595,7 @@ class RedisClusterClientIntegrationTests extends TestSupport {
     void testReadFrom() {
         StatefulRedisClusterConnection<String, String> statefulConnection = connection;
 
-        assertThat(statefulConnection.getReadFrom()).isEqualTo(ReadFrom.MASTER);
+        assertThat(statefulConnection.getReadFrom()).isEqualTo(ReadFrom.UPSTREAM);
 
         statefulConnection.setReadFrom(ReadFrom.NEAREST);
         assertThat(statefulConnection.getReadFrom()).isEqualTo(ReadFrom.NEAREST);

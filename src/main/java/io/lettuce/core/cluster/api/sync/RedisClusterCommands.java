@@ -29,13 +29,13 @@ import io.lettuce.core.api.sync.*;
  * @author Mark Paluch
  * @since 4.0
  */
-public interface RedisClusterCommands<K, V> extends BaseRedisCommands<K, V>, RedisGeoCommands<K, V>, RedisHashCommands<K, V>,
-        RedisHLLCommands<K, V>, RedisKeyCommands<K, V>, RedisListCommands<K, V>, RedisScriptingCommands<K, V>,
-        RedisServerCommands<K, V>, RedisSetCommands<K, V>, RedisSortedSetCommands<K, V>, RedisStreamCommands<K, V>,
-        RedisStringCommands<K, V> {
+public interface RedisClusterCommands<K, V>
+        extends BaseRedisCommands<K, V>, RedisGeoCommands<K, V>, RedisHashCommands<K, V>, RedisHLLCommands<K, V>,
+        RedisKeyCommands<K, V>, RedisListCommands<K, V>, RedisScriptingCommands<K, V>, RedisServerCommands<K, V>,
+        RedisSetCommands<K, V>, RedisSortedSetCommands<K, V>, RedisStreamCommands<K, V>, RedisStringCommands<K, V> {
 
     /**
-     * Set the default timeout for operations.
+     * Set the default timeout for operations. A zero timeout value indicates to not time out.
      *
      * @param timeout the timeout value
      * @since 5.0
@@ -49,6 +49,16 @@ public interface RedisClusterCommands<K, V> extends BaseRedisCommands<K, V>, Red
      * @return String simple-string-reply
      */
     String auth(CharSequence password);
+
+    /**
+     * Authenticate to the server with username and password. Requires Redis 6 or newer.
+     *
+     * @param username the username
+     * @param password the password
+     * @return String simple-string-reply
+     * @since 6.0
+     */
+    String auth(String username, CharSequence password);
 
     /**
      * Generate a new config epoch, incrementing the current epoch, assign the new epoch to this node, WITHOUT any consensus and
@@ -70,7 +80,7 @@ public interface RedisClusterCommands<K, V> extends BaseRedisCommands<K, V>, Red
     String clusterMeet(String ip, int port);
 
     /**
-     * Blacklist and remove the cluster node from the cluster.
+     * Disallow connections and remove the cluster node from the cluster.
      *
      * @param nodeId the node Id
      * @return String simple-string-reply
@@ -244,7 +254,7 @@ public interface RedisClusterCommands<K, V> extends BaseRedisCommands<K, V>, Red
     /**
      * Failover a cluster node. Turns the currently connected node into a master and the master into its replica.
      *
-     * @param force do not coordinate with master if {@literal true}
+     * @param force do not coordinate with master if {@code true}
      * @return String simple-string-reply
      */
     String clusterFailover(boolean force);
@@ -261,7 +271,7 @@ public interface RedisClusterCommands<K, V> extends BaseRedisCommands<K, V>, Red
      * <li>If the node was a replica, the whole data set is flushed away</li>
      * </ul>
      *
-     * @param hard {@literal true} for hard reset. Generates a new nodeId and currentEpoch/configEpoch are set to 0
+     * @param hard {@code true} for hard reset. Generates a new nodeId and currentEpoch/configEpoch are set to 0
      * @return String simple-string-reply
      */
     String clusterReset(boolean hard);
@@ -274,8 +284,8 @@ public interface RedisClusterCommands<K, V> extends BaseRedisCommands<K, V>, Red
     String clusterFlushslots();
 
     /**
-     * Tells a Redis cluster replica node that the client is ok reading possibly stale data and is not interested in running write
-     * queries.
+     * Tells a Redis cluster replica node that the client is ok reading possibly stale data and is not interested in running
+     * write queries.
      *
      * @return String simple-string-reply
      */
@@ -287,4 +297,5 @@ public interface RedisClusterCommands<K, V> extends BaseRedisCommands<K, V>, Red
      * @return String simple-string-reply
      */
     String readWrite();
+
 }

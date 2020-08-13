@@ -16,15 +16,12 @@
 package io.lettuce.core.protocol;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 import java.nio.channels.ClosedChannelException;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Queue;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -43,7 +40,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.test.util.ReflectionTestUtils;
+import io.lettuce.test.ReflectionTestUtils;
 
 import edu.umd.cs.mtc.MultithreadedTestCase;
 import edu.umd.cs.mtc.TestFramework;
@@ -224,7 +221,6 @@ class DefaultEndpointUnitTests {
 
         verify(channel).write(command);
         verify(channel).flush();
-
     }
 
     @Test
@@ -260,12 +256,8 @@ class DefaultEndpointUnitTests {
                 .disconnectedBehavior(ClientOptions.DisconnectedBehavior.REJECT_COMMANDS) //
                 .build(), clientResources);
 
-        try {
-            sut.write(command);
-            fail("Missing RedisException");
-        } catch (RedisException e) {
-            assertThat(e).hasMessageContaining("Commands are rejected");
-        }
+        sut.write(command);
+        assertThat(command.exception).hasMessageContaining("Commands are rejected");
     }
 
     @Test
@@ -273,12 +265,8 @@ class DefaultEndpointUnitTests {
 
         sut.close();
 
-        try {
-            sut.write(command);
-            fail("Missing RedisException");
-        } catch (RedisException e) {
-            assertThat(e).hasMessageContaining("Connection is closed");
-        }
+        sut.write(command);
+        assertThat(command.exception).hasMessageContaining("Connection is closed");
     }
 
     @Test
@@ -289,12 +277,8 @@ class DefaultEndpointUnitTests {
                 .disconnectedBehavior(ClientOptions.DisconnectedBehavior.DEFAULT) //
                 .build(), clientResources);
 
-        try {
-            sut.write(command);
-            fail("Missing RedisException");
-        } catch (RedisException e) {
-            assertThat(e).hasMessageContaining("Commands are rejected");
-        }
+        sut.write(command);
+        assertThat(command.exception).hasMessageContaining("Commands are rejected");
     }
 
     @Test
@@ -372,6 +356,68 @@ class DefaultEndpointUnitTests {
     }
 
     @Test
+    void shouldWrapActivationCommands() {
+
+        when(channel.isActive()).thenReturn(true);
+        doAnswer(i -> {
+
+            sut.write(new Command<>(CommandType.AUTH, new StatusOutput<>(StringCodec.UTF8)));
+            sut.write(Collections.singletonList(new Command<>(CommandType.SELECT, new StatusOutput<>(StringCodec.UTF8))));
+            return null;
+        }).when(connectionFacade).activated();
+
+        sut.notifyChannelActive(channel);
+
+        DefaultChannelPromise promise = new DefaultChannelPromise(channel, ImmediateEventExecutor.INSTANCE);
+
+        when(channel.writeAndFlush(any())).thenAnswer(invocation -> {
+            if (invocation.getArguments()[0] instanceof RedisCommand) {
+                queue.add((RedisCommand) invocation.getArguments()[0]);
+            }
+
+            if (invocation.getArguments()[0] instanceof Collection) {
+                queue.addAll((Collection) invocation.getArguments()[0]);
+            }
+            return promise;
+        });
+
+        assertThat(queue).hasSize(2).hasOnlyElementsOfTypes(DefaultEndpoint.ActivationCommand.class);
+    }
+
+    @Test
+    void shouldNotReplayActivationCommands() {
+
+        when(channel.isActive()).thenReturn(true);
+        ConnectionTestUtil.getDisconnectedBuffer(sut).add(new DefaultEndpoint.ActivationCommand<>(
+                new Command<>(CommandType.SELECT, new StatusOutput<>(StringCodec.UTF8))));
+        ConnectionTestUtil.getDisconnectedBuffer(sut).add(new LatencyMeteredCommand<>(new DefaultEndpoint.ActivationCommand<>(
+                new Command<>(CommandType.SUBSCRIBE, new StatusOutput<>(StringCodec.UTF8)))));
+
+        doAnswer(i -> {
+
+            sut.write(new Command<>(CommandType.AUTH, new StatusOutput<>(StringCodec.UTF8)));
+            return null;
+        }).when(connectionFacade).activated();
+
+        sut.notifyChannelActive(channel);
+
+        DefaultChannelPromise promise = new DefaultChannelPromise(channel, ImmediateEventExecutor.INSTANCE);
+
+        when(channel.writeAndFlush(any())).thenAnswer(invocation -> {
+            if (invocation.getArguments()[0] instanceof RedisCommand) {
+                queue.add((RedisCommand) invocation.getArguments()[0]);
+            }
+
+            if (invocation.getArguments()[0] instanceof Collection) {
+                queue.addAll((Collection) invocation.getArguments()[0]);
+            }
+            return promise;
+        });
+
+        assertThat(queue).hasSize(1).extracting(RedisCommand::getType).containsOnly(CommandType.AUTH);
+    }
+
+    @Test
     void testMTCConcurrentConcurrentWrite() throws Throwable {
         TestFramework.runOnce(new MTCConcurrentConcurrentWrite(command, clientResources));
     }
@@ -422,8 +468,8 @@ class DefaultEndpointUnitTests {
         /**
          * Create a new {@link DefaultEndpoint}.
          *
-         * @param clientOptions client options for this connection, must not be {@literal null}.
-         * @param clientResources client resources for this connection, must not be {@literal null}.
+         * @param clientOptions client options for this connection, must not be {@code null}.
+         * @param clientResources client resources for this connection, must not be {@code null}.
          */
         TestableEndpoint(ClientOptions clientOptions, ClientResources clientResources) {
             super(clientOptions, clientResources);

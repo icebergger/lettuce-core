@@ -25,7 +25,6 @@ import static org.mockito.Mockito.verifyZeroInteractions;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import reactor.test.StepVerifier;
 import io.lettuce.core.event.Event;
@@ -164,9 +163,9 @@ class DefaultClientResourcesUnitTests {
         EventExecutorGroup eventExecutors = sut.eventExecutorGroup();
         NioEventLoopGroup eventLoopGroup = sut.eventLoopGroupProvider().allocate(NioEventLoopGroup.class);
 
-        assertThat(eventExecutors).hasSize(3);
-        assertThat(eventLoopGroup.executorCount()).isEqualTo(3);
-        assertThat(sut.ioThreadPoolSize()).isEqualTo(3);
+        assertThat(eventExecutors).hasSize(2);
+        assertThat(eventLoopGroup.executorCount()).isEqualTo(2);
+        assertThat(sut.ioThreadPoolSize()).isEqualTo(2);
 
         assertThat(TestFutures.getOrTimeout(sut.shutdown(0, 0, TimeUnit.MILLISECONDS))).isTrue();
     }
@@ -223,14 +222,14 @@ class DefaultClientResourcesUnitTests {
         ClientResources clientResources = ClientResources.create();
         HashedWheelTimer timer = (HashedWheelTimer) clientResources.timer();
 
-        assertThat(ReflectionTestUtils.getField(timer, "workerState")).isEqualTo(0);
+        assertThat(timer).hasFieldOrPropertyWithValue("workerState", 0);
 
         ClientResources copy = clientResources.mutate().build();
         assertThat(copy.timer()).isSameAs(timer);
 
         copy.shutdown().awaitUninterruptibly();
 
-        assertThat(ReflectionTestUtils.getField(timer, "workerState")).isEqualTo(2);
+        assertThat(timer).hasFieldOrPropertyWithValue("workerState", 2);
     }
 
     @Test
@@ -239,7 +238,7 @@ class DefaultClientResourcesUnitTests {
         ClientResources clientResources = ClientResources.create();
         HashedWheelTimer timer = (HashedWheelTimer) clientResources.timer();
 
-        assertThat(ReflectionTestUtils.getField(timer, "workerState")).isEqualTo(0);
+        assertThat(timer).hasFieldOrPropertyWithValue("workerState", 0);
 
         ClientResources copy = clientResources.mutate().timer(new HashedWheelTimer()).build();
         HashedWheelTimer copyTimer = (HashedWheelTimer) copy.timer();
@@ -247,8 +246,8 @@ class DefaultClientResourcesUnitTests {
 
         copy.shutdown().awaitUninterruptibly();
 
-        assertThat(ReflectionTestUtils.getField(timer, "workerState")).isEqualTo(0);
-        assertThat(ReflectionTestUtils.getField(copyTimer, "workerState")).isEqualTo(0);
+        assertThat(timer).hasFieldOrPropertyWithValue("workerState", 0);
+        assertThat(copyTimer).hasFieldOrPropertyWithValue("workerState", 0);
 
         copyTimer.stop();
         timer.stop();

@@ -17,6 +17,7 @@ package io.lettuce.core;
 
 import java.util.List;
 
+import io.lettuce.core.internal.LettuceStrings;
 import io.lettuce.core.models.role.RedisNodeDescription;
 
 /**
@@ -29,24 +30,44 @@ import io.lettuce.core.models.role.RedisNodeDescription;
 public abstract class ReadFrom {
 
     /**
-     * Setting to read from the master only.
+     * Setting to read from the upstream only.
+     *
+     * @deprecated since 6.0 in favor of {@link #UPSTREAM}.
      */
-    public static final ReadFrom MASTER = new ReadFromImpl.ReadFromMaster();
+    @Deprecated
+    public static final ReadFrom MASTER = new ReadFromImpl.ReadFromUpstream();
 
     /**
-     * Setting to read preferred from the master and fall back to a replica if the master is not available.
+     * Setting to read preferred from the upstream and fall back to a replica if the master is not available.
+     *
+     * @deprecated since 6.0 in favor of {@link #UPSTREAM_PREFERRED}.
      */
-    public static final ReadFrom MASTER_PREFERRED = new ReadFromImpl.ReadFromMasterPreferred();
+    @Deprecated
+    public static final ReadFrom MASTER_PREFERRED = new ReadFromImpl.ReadFromUpstreamPreferred();
 
     /**
-     * Setting to read preferred from replica and fall back to master if no replica is not available.
+     * Setting to read from the upstream only.
+     *
+     * @since 6.0
+     */
+    public static final ReadFrom UPSTREAM = new ReadFromImpl.ReadFromUpstream();
+
+    /**
+     * Setting to read preferred from the upstream and fall back to a replica if the upstream is not available.
+     *
+     * @since 6.0
+     */
+    public static final ReadFrom UPSTREAM_PREFERRED = new ReadFromImpl.ReadFromUpstreamPreferred();
+
+    /**
+     * Setting to read preferred from replica and fall back to upstream if no replica is not available.
      *
      * @since 5.2
      */
     public static final ReadFrom REPLICA_PREFERRED = new ReadFromImpl.ReadFromReplicaPreferred();
 
     /**
-     * Setting to read preferred from replicas and fall back to master if no replica is not available.
+     * Setting to read preferred from replicas and fall back to upstream if no replica is not available.
      *
      * @since 4.4
      * @deprecated Renamed to {@link #REPLICA_PREFERRED}.
@@ -92,7 +113,7 @@ public abstract class ReadFrom {
     /**
      * Returns whether this {@link ReadFrom} requires ordering of the resulting {@link RedisNodeDescription nodes}.
      *
-     * @return {@literal true} if code using {@link ReadFrom} should retain ordering or {@literal false} to allow reordering of
+     * @return {@code true} if code using {@link ReadFrom} should retain ordering or {@code false} to allow reordering of
      *         {@link RedisNodeDescription nodes}.
      * @since 5.2
      */
@@ -105,7 +126,7 @@ public abstract class ReadFrom {
      *
      * @param name the name of the read from setting
      * @return the {@link ReadFrom} preset
-     * @throws IllegalArgumentException if {@code name} is empty, {@literal null} or the {@link ReadFrom} preset is unknown.
+     * @throws IllegalArgumentException if {@code name} is empty, {@code null} or the {@link ReadFrom} preset is unknown.
      */
     public static ReadFrom valueOf(String name) {
 
@@ -114,11 +135,19 @@ public abstract class ReadFrom {
         }
 
         if (name.equalsIgnoreCase("master")) {
-            return MASTER;
+            return UPSTREAM;
         }
 
         if (name.equalsIgnoreCase("masterPreferred")) {
-            return MASTER_PREFERRED;
+            return UPSTREAM_PREFERRED;
+        }
+
+        if (name.equalsIgnoreCase("upstream")) {
+            return UPSTREAM;
+        }
+
+        if (name.equalsIgnoreCase("upstreamPreferred")) {
+            return UPSTREAM_PREFERRED;
         }
 
         if (name.equalsIgnoreCase("slave") || name.equalsIgnoreCase("replica")) {
@@ -152,5 +181,7 @@ public abstract class ReadFrom {
          *
          */
         List<RedisNodeDescription> getNodes();
+
     }
+
 }

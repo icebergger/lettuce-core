@@ -17,16 +17,16 @@ package io.lettuce.core.protocol;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.fail;
 
+import java.lang.reflect.Field;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Queue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import javax.inject.Inject;
@@ -34,7 +34,9 @@ import javax.inject.Inject;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.junit.platform.commons.util.ReflectionUtils;
+
+import io.lettuce.test.ReflectionTestUtils;
 
 import io.lettuce.core.*;
 import io.lettuce.core.api.StatefulRedisConnection;
@@ -42,10 +44,12 @@ import io.lettuce.core.api.async.RedisAsyncCommands;
 import io.lettuce.core.event.Event;
 import io.lettuce.core.event.connection.ReconnectFailedEvent;
 import io.lettuce.core.resource.ClientResources;
+import io.lettuce.core.resource.NettyCustomizer;
 import io.lettuce.test.*;
 import io.lettuce.test.resource.FastShutdown;
 import io.lettuce.test.server.RandomResponseServer;
 import io.lettuce.test.settings.TestSettings;
+import io.netty.channel.Channel;
 import io.netty.channel.local.LocalAddress;
 
 /**
@@ -160,7 +164,9 @@ class ConnectionFailureIntegrationTests extends TestSupport {
 
             ReconnectionListener reconnectionListener = events::offer;
 
-            ReflectionTestUtils.setField(connectionWatchdog, "reconnectionListener", reconnectionListener);
+            Field field = ConnectionWatchdog.class.getDeclaredField("reconnectionListener");
+            field.setAccessible(true);
+            field.set(connectionWatchdog, reconnectionListener);
 
             redisUri.setPort(TestSettings.nonexistentPort());
 
@@ -290,6 +296,78 @@ class ConnectionFailureIntegrationTests extends TestSupport {
             FastShutdown.shutdown(client);
             FastShutdown.shutdown(clientResources);
         }
+    }
+
+    @Test
+    void pingOnConnectFailureShouldCloseConnection() throws Exception {
+
+        AtomicReference<Channel> ref = new AtomicReference<>();
+        ClientResources clientResources = ClientResources.builder().nettyCustomizer(new NettyCustomizer() {
+            @Override
+            public void afterChannelInitialized(Channel channel) {
+                ref.set(channel);
+            }
+        }).build();
+
+        // Cluster node with auth
+        RedisURI redisUri = RedisURI.create(TestSettings.host(), 7385);
+        RedisClient client = RedisClient.create(clientResources);
+
+        client.setOptions(ClientOptions.builder().pingBeforeActivateConnection(true).build());
+
+        try {
+            client.connect(redisUri);
+            fail("Missing Exception");
+        } catch (Exception e) {
+            Wait.untilEquals(false, ref.get()::isRegistered).waitOrTimeout();
+            assertThat(ref.get().isOpen()).isFalse();
+            Wait.untilEquals(false, () -> ref.get().isRegistered()).waitOrTimeout();
+        } finally {
+            FastShutdown.shutdown(client);
+            FastShutdown.shutdown(clientResources);
+        }
+    }
+
+    @Test
+    void pingOnConnectFailureShouldCloseConnectionOnReconnect() throws Exception {
+
+        BlockingQueue<Channel> ref = new LinkedBlockingQueue<>();
+        ClientResources clientResources = ClientResources.builder().nettyCustomizer(new NettyCustomizer() {
+            @Override
+            public void afterChannelInitialized(Channel channel) {
+                ref.add(channel);
+            }
+        }).build();
+
+        RedisURI redisUri = RedisURI.create(TestSettings.host(), TestSettings.port());
+        RedisClient client = RedisClient.create(clientResources, redisUri);
+        client.setOptions(ClientOptions.builder().pingBeforeActivateConnection(true).build());
+
+        StatefulRedisConnection<String, String> connection = client.connect();
+
+        ConnectionWatchdog connectionWatchdog = ConnectionTestUtil.getConnectionWatchdog(connection);
+        connectionWatchdog.setListenOnChannelInactive(false);
+        connection.async().quit();
+
+        // Cluster node with auth
+        redisUri.setPort(7385);
+
+        connectionWatchdog.setListenOnChannelInactive(true);
+        connectionWatchdog.scheduleReconnect();
+
+        Wait.untilTrue(() -> ref.size() > 1).waitOrTimeout();
+
+        redisUri.setPort(TestSettings.port());
+
+        Channel initial = ref.take();
+        assertThat(initial.isOpen()).isFalse();
+
+        Channel reconnect = ref.take();
+        Wait.untilTrue(() -> !reconnect.isOpen()).waitOrTimeout();
+        assertThat(reconnect.isOpen()).isFalse();
+
+        FastShutdown.shutdown(client);
+        FastShutdown.shutdown(clientResources);
     }
 
     /**

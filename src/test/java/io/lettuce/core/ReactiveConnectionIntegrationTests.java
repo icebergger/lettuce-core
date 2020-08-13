@@ -44,10 +44,13 @@ import io.lettuce.core.api.sync.RedisCommands;
 import io.lettuce.test.Delay;
 import io.lettuce.test.LettuceExtension;
 import io.lettuce.test.Wait;
+import io.lettuce.test.WithPassword;
+import io.lettuce.test.condition.EnabledOnCommand;
 
 /**
  * @author Mark Paluch
  * @author Nikolai Perevozchikov
+ * @author Tugdual Grall
  */
 @ExtendWith(LettuceExtension.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -202,7 +205,31 @@ class ReactiveConnectionIntegrationTests extends TestSupport {
 
     @Test
     void auth() {
-        StepVerifier.create(reactive.auth("error")).expectError().verify();
+        WithPassword.enableAuthentication(this.connection.sync());
+
+        try {
+            StepVerifier.create(reactive.auth("error")).expectError().verify();
+        } finally {
+            WithPassword.disableAuthentication(this.connection.sync());
+        }
+    }
+
+    @Test
+    @EnabledOnCommand("ACL")
+    void authWithUsername() {
+
+        try {
+
+            StepVerifier.create(reactive.auth(username, "error")).expectNext("OK").verifyComplete();
+
+            WithPassword.enableAuthentication(this.connection.sync());
+
+            StepVerifier.create(reactive.auth(username, "error")).expectError().verify();
+            StepVerifier.create(reactive.auth(aclUsername, aclPasswd)).expectNext("OK").verifyComplete();
+            StepVerifier.create(reactive.auth(aclUsername, "error")).expectError().verify();
+        } finally {
+            WithPassword.disableAuthentication(this.connection.sync());
+        }
     }
 
     @Test
@@ -228,14 +255,11 @@ class ReactiveConnectionIntegrationTests extends TestSupport {
         connection.async().quit();
         Wait.untilTrue(() -> !connection.isOpen()).waitOrTimeout();
 
-        StepVerifier
-                .create(connection.reactive().ping())
-                .consumeErrorWith(
-                        throwable -> {
-                            assertThat(throwable).isInstanceOf(RedisException.class).hasMessageContaining(
-                                    "not connected. Commands are rejected");
+        StepVerifier.create(connection.reactive().ping()).consumeErrorWith(throwable -> {
+            assertThat(throwable).isInstanceOf(RedisException.class)
+                    .hasMessageContaining("not connected. Commands are rejected");
 
-                        }).verify();
+        }).verify();
 
         connection.close();
     }

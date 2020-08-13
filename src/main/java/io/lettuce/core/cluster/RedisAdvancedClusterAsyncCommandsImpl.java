@@ -18,7 +18,7 @@ package io.lettuce.core.cluster;
 import static io.lettuce.core.cluster.ClusterScanSupport.asyncClusterKeyScanCursorMapper;
 import static io.lettuce.core.cluster.ClusterScanSupport.asyncClusterStreamScanCursorMapper;
 import static io.lettuce.core.cluster.NodeSelectionInvocationHandler.ExecutionModel.ASYNC;
-import static io.lettuce.core.cluster.models.partitions.RedisClusterNode.NodeFlag.MASTER;
+import static io.lettuce.core.cluster.models.partitions.RedisClusterNode.NodeFlag.UPSTREAM;
 
 import java.lang.reflect.Proxy;
 import java.util.*;
@@ -58,6 +58,7 @@ import io.lettuce.core.protocol.CommandType;
  * @param <K> Key type.
  * @param <V> Value type.
  * @author Mark Paluch
+ * @author Jon Chambers
  * @since 3.3
  */
 @SuppressWarnings("unchecked")
@@ -153,7 +154,7 @@ public class RedisAdvancedClusterAsyncCommandsImpl<K, V> extends AbstractRedisAs
 
     @Override
     public RedisFuture<Long> dbsize() {
-        return MultiNodeExecution.aggregateAsync(executeOnMasters(RedisServerAsyncCommands::dbsize));
+        return MultiNodeExecution.aggregateAsync(executeOnUpstream(RedisServerAsyncCommands::dbsize));
     }
 
     @Override
@@ -205,12 +206,17 @@ public class RedisAdvancedClusterAsyncCommandsImpl<K, V> extends AbstractRedisAs
 
     @Override
     public RedisFuture<String> flushall() {
-        return MultiNodeExecution.firstOfAsync(executeOnMasters(RedisServerAsyncCommands::flushall));
+        return MultiNodeExecution.firstOfAsync(executeOnUpstream(RedisServerAsyncCommands::flushall));
+    }
+
+    @Override
+    public RedisFuture<String> flushallAsync() {
+        return MultiNodeExecution.firstOfAsync(executeOnUpstream(RedisServerAsyncCommands::flushallAsync));
     }
 
     @Override
     public RedisFuture<String> flushdb() {
-        return MultiNodeExecution.firstOfAsync(executeOnMasters(RedisServerAsyncCommands::flushdb));
+        return MultiNodeExecution.firstOfAsync(executeOnUpstream(RedisServerAsyncCommands::flushdb));
     }
 
     @Override
@@ -258,7 +264,7 @@ public class RedisAdvancedClusterAsyncCommandsImpl<K, V> extends AbstractRedisAs
     @Override
     public RedisFuture<List<K>> keys(K pattern) {
 
-        Map<String, CompletableFuture<List<K>>> executions = executeOnMasters(commands -> commands.keys(pattern));
+        Map<String, CompletableFuture<List<K>>> executions = executeOnUpstream(commands -> commands.keys(pattern));
 
         return new PipelinedRedisFuture<>(executions, objectPipelinedRedisFuture -> {
             List<K> result = new ArrayList<>();
@@ -272,7 +278,7 @@ public class RedisAdvancedClusterAsyncCommandsImpl<K, V> extends AbstractRedisAs
     @Override
     public RedisFuture<Long> keys(KeyStreamingChannel<K> channel, K pattern) {
 
-        Map<String, CompletableFuture<Long>> executions = executeOnMasters(commands -> commands.keys(channel, pattern));
+        Map<String, CompletableFuture<Long>> executions = executeOnUpstream(commands -> commands.keys(channel, pattern));
         return MultiNodeExecution.aggregateAsync(executions);
     }
 
@@ -392,13 +398,13 @@ public class RedisAdvancedClusterAsyncCommandsImpl<K, V> extends AbstractRedisAs
     }
 
     @Override
-    public RedisFuture<V> randomkey() {
+    public RedisFuture<K> randomkey() {
 
         Partitions partitions = getStatefulConnection().getPartitions();
         int index = ThreadLocalRandom.current().nextInt(partitions.size());
         RedisClusterNode partition = partitions.getPartition(index);
 
-        CompletableFuture<V> future = getConnectionAsync(partition.getUri().getHost(), partition.getUri().getPort())
+        CompletableFuture<K> future = getConnectionAsync(partition.getUri().getHost(), partition.getUri().getPort())
                 .thenCompose(RedisKeyAsyncCommands::randomkey);
 
         return new PipelinedRedisFuture<>(future);
@@ -415,13 +421,13 @@ public class RedisAdvancedClusterAsyncCommandsImpl<K, V> extends AbstractRedisAs
     @Override
     public RedisFuture<String> scriptKill() {
 
-        Map<String, CompletableFuture<String>> executions = executeOnNodes(RedisScriptingAsyncCommands::scriptFlush,
+        Map<String, CompletableFuture<String>> executions = executeOnNodes(RedisScriptingAsyncCommands::scriptKill,
                 redisClusterNode -> true);
         return MultiNodeExecution.alwaysOkOfAsync(executions);
     }
 
     @Override
-    public RedisFuture<String> scriptLoad(V script) {
+    public RedisFuture<String> scriptLoad(byte[] script) {
 
         Map<String, CompletableFuture<String>> executions = executeOnNodes(cmd -> cmd.scriptLoad(script),
                 redisClusterNode -> true);
@@ -608,9 +614,9 @@ public class RedisAdvancedClusterAsyncCommandsImpl<K, V> extends AbstractRedisAs
      * @param <T> result type
      * @return map of a key (counter) and commands.
      */
-    protected <T> Map<String, CompletableFuture<T>> executeOnMasters(
+    protected <T> Map<String, CompletableFuture<T>> executeOnUpstream(
             Function<RedisClusterAsyncCommands<K, V>, RedisFuture<T>> function) {
-        return executeOnNodes(function, redisClusterNode -> redisClusterNode.is(MASTER));
+        return executeOnNodes(function, redisClusterNode -> redisClusterNode.is(UPSTREAM));
     }
 
     /**
@@ -678,4 +684,5 @@ public class RedisAdvancedClusterAsyncCommandsImpl<K, V> extends AbstractRedisAs
         RedisFuture<T> scanCursor = scanFunction.apply(connection.getConnection(currentNodeId).async(), continuationCursor);
         return mapper.map(nodeIds, currentNodeId, scanCursor);
     }
+
 }

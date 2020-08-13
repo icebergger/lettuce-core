@@ -17,11 +17,15 @@ package io.lettuce.core;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.nio.charset.StandardCharsets;
+
 import org.junit.jupiter.api.Test;
 
 import io.lettuce.core.protocol.ProtocolVersion;
 
 /**
+ * Unit tests for {@link ClientOptions}.
+ *
  * @author Mark Paluch
  */
 class ClientOptionsUnitTests {
@@ -33,26 +37,29 @@ class ClientOptionsUnitTests {
 
     @Test
     void testBuilder() {
-        checkAssertions(ClientOptions.builder().build());
+        ClientOptions options = ClientOptions.builder().scriptCharset(StandardCharsets.US_ASCII).build();
+        checkAssertions(options);
+        assertThat(options.getScriptCharset()).isEqualTo(StandardCharsets.US_ASCII);
     }
 
     @Test
     void testCopy() {
 
-        ClientOptions original = ClientOptions.builder().build();
+        ClientOptions original = ClientOptions.builder().scriptCharset(StandardCharsets.US_ASCII).build();
         ClientOptions copy = ClientOptions.copyOf(original);
 
         checkAssertions(copy);
+        assertThat(copy.getScriptCharset()).isEqualTo(StandardCharsets.US_ASCII);
+        assertThat(copy.mutate().build().getScriptCharset()).isEqualTo(StandardCharsets.US_ASCII);
 
         assertThat(original.mutate()).isNotSameAs(copy.mutate());
     }
 
     void checkAssertions(ClientOptions sut) {
-        assertThat(sut.isAutoReconnect()).isEqualTo(true);
-        assertThat(sut.isCancelCommandsOnReconnectFailure()).isEqualTo(false);
+        assertThat(sut.isAutoReconnect()).isTrue();
+        assertThat(sut.isCancelCommandsOnReconnectFailure()).isFalse();
         assertThat(sut.getProtocolVersion()).isEqualTo(ProtocolVersion.RESP3);
-        assertThat(sut.isSuspendReconnectOnProtocolFailure()).isEqualTo(false);
+        assertThat(sut.isSuspendReconnectOnProtocolFailure()).isFalse();
         assertThat(sut.getDisconnectedBehavior()).isEqualTo(ClientOptions.DisconnectedBehavior.DEFAULT);
-        assertThat(sut.getBufferUsageRatio()).isEqualTo(ClientOptions.DEFAULT_BUFFER_USAGE_RATIO);
     }
 }

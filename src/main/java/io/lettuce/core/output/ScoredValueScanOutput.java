@@ -17,7 +17,7 @@ package io.lettuce.core.output;
 
 import java.nio.ByteBuffer;
 
-import io.lettuce.core.LettuceStrings;
+import io.lettuce.core.internal.LettuceStrings;
 import io.lettuce.core.ScoredValue;
 import io.lettuce.core.ScoredValueScanCursor;
 import io.lettuce.core.codec.RedisCodec;
@@ -54,4 +54,5 @@ public class ScoredValueScanOutput<K, V> extends ScanOutput<K, V, ScoredValueSca
         output.getValues().add(ScoredValue.fromNullable(number, value));
         value = null;
     }
+
 }

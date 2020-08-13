@@ -20,7 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
 
-import io.lettuce.core.ExceptionFactory;
+import io.lettuce.core.internal.ExceptionFactory;
 import io.lettuce.core.TransactionResult;
 import io.lettuce.core.codec.RedisCodec;
 import io.lettuce.core.internal.LettuceFactories;
@@ -37,8 +37,11 @@ import io.lettuce.core.protocol.RedisCommand;
 public class MultiOutput<K, V> extends CommandOutput<K, V, TransactionResult> {
 
     private final Queue<RedisCommand<K, V, ?>> queue;
+
     private List<Object> responses = new ArrayList<>();
+
     private Boolean discarded;
+
     private Integer multi;
 
     public MultiOutput(RedisCodec<K, V> codec) {
@@ -157,4 +160,5 @@ public class MultiOutput<K, V> extends CommandOutput<K, V, TransactionResult> {
     public TransactionResult get() {
         return new DefaultTransactionResult(discarded == null ? false : discarded, responses);
     }
+
 }

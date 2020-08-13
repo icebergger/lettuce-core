@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -38,7 +39,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.lettuce.core.*;
 import io.lettuce.core.api.StatefulRedisConnection;
+import io.lettuce.core.api.push.PushMessage;
 import io.lettuce.core.api.sync.RedisCommands;
+import io.lettuce.core.codec.StringCodec;
 import io.lettuce.core.models.command.CommandDetail;
 import io.lettuce.core.models.command.CommandDetailParser;
 import io.lettuce.core.models.role.RedisInstance;
@@ -51,6 +54,8 @@ import io.lettuce.test.condition.RedisConditions;
 import io.lettuce.test.settings.TestSettings;
 
 /**
+ * Integration tests for {@link io.lettuce.core.api.sync.RedisServerCommands}.
+ *
  * @author Will Glozer
  * @author Mark Paluch
  * @author Zhang Jessey
@@ -89,12 +94,46 @@ public class ServerCommandIntegrationTests extends TestSupport {
     }
 
     @Test
+    @EnabledOnCommand("ACL")
+    void clientCaching() {
+
+        redis.clientTracking(TrackingArgs.Builder.enabled(false));
+
+        try {
+            redis.clientTracking(TrackingArgs.Builder.enabled(true).optout());
+
+            redis.clientCaching(false);
+
+            redis.clientTracking(TrackingArgs.Builder.enabled(false));
+            redis.clientTracking(TrackingArgs.Builder.enabled(true).optin());
+            redis.clientCaching(true);
+        } finally {
+            redis.clientTracking(TrackingArgs.Builder.enabled(false));
+        }
+    }
+
+    @Test
     void clientGetSetname() {
         assertThat(redis.clientGetname()).isNull();
         assertThat(redis.clientSetname("test")).isEqualTo("OK");
         assertThat(redis.clientGetname()).isEqualTo("test");
         assertThat(redis.clientSetname("")).isEqualTo("OK");
         assertThat(redis.clientGetname()).isNull();
+    }
+
+    @Test
+    @EnabledOnCommand("ACL")
+    void clientGetredir() {
+
+        try (StatefulRedisConnection<String, String> connection2 = client.connect()) {
+
+            Long processId = redis.clientId();
+
+            assertThat(connection2.sync().clientGetredir()).isLessThanOrEqualTo(0);
+            assertThat(connection2.sync().clientTracking(TrackingArgs.Builder.enabled(true).redirect(processId)))
+                    .isEqualTo("OK");
+            assertThat(connection2.sync().clientGetredir()).isEqualTo(processId);
+        }
     }
 
     @Test
@@ -135,8 +174,72 @@ public class ServerCommandIntegrationTests extends TestSupport {
     }
 
     @Test
+    void clientId() {
+        assertThat(redis.clientId()).isNotNull();
+    }
+
+    @Test
     void clientList() {
         assertThat(redis.clientList().contains("addr=")).isTrue();
+    }
+
+    @Test
+    @EnabledOnCommand("ACL")
+    void clientTracking() {
+
+        redis.clientTracking(TrackingArgs.Builder.enabled(false));
+
+        redis.clientTracking(TrackingArgs.Builder.enabled());
+        List<PushMessage> pushMessages = new CopyOnWriteArrayList<>();
+
+        redis.getStatefulConnection().addListener(pushMessages::add);
+
+        redis.set(key, value);
+        assertThat(pushMessages.isEmpty());
+
+        redis.get(key);
+        redis.set(key, "value2");
+
+        Wait.untilEquals(1, pushMessages::size).waitOrTimeout();
+
+        assertThat(pushMessages).hasSize(1);
+        PushMessage message = pushMessages.get(0);
+
+        assertThat(message.getType()).isEqualTo("invalidate");
+        assertThat((List) message.getContent(StringCodec.UTF8::decodeKey).get(1)).containsOnly(key);
+    }
+
+    @Test
+    @EnabledOnCommand("ACL")
+    void clientTrackingPrefixes() {
+
+        redis.clientTracking(TrackingArgs.Builder.enabled(false));
+
+        redis.clientTracking(TrackingArgs.Builder.enabled().bcast().prefixes("foo", "bar"));
+        List<PushMessage> pushMessages = new CopyOnWriteArrayList<>();
+
+        redis.getStatefulConnection().addListener(pushMessages::add);
+
+        redis.get(key);
+        redis.set(key, value);
+        assertThat(pushMessages.isEmpty());
+
+        redis.set("foo", value);
+
+        Wait.untilEquals(1, pushMessages::size).waitOrTimeout();
+
+        assertThat(pushMessages).hasSize(1);
+        PushMessage message = pushMessages.get(0);
+
+        assertThat(message.getType()).isEqualTo("invalidate");
+        assertThat((List) message.getContent(StringCodec.UTF8::decodeKey).get(1)).containsOnly("foo");
+
+        redis.clientTracking(TrackingArgs.Builder.enabled().bcast().prefixes(key));
+        redis.set("foo", value);
+
+        Wait.untilEquals(2, pushMessages::size).waitOrTimeout();
+
+        assertThat(pushMessages).hasSize(2);
     }
 
     @Test
@@ -177,25 +280,25 @@ public class ServerCommandIntegrationTests extends TestSupport {
 
         List<Object> result = redis.command();
 
-        assertThat(result.size()).isGreaterThan(100);
+        assertThat(result).hasSizeGreaterThan(100);
 
         List<CommandDetail> commands = CommandDetailParser.parse(result);
         assertThat(commands).hasSameSizeAs(result);
     }
 
     @Test
-    void commandInfo() {
+    public void commandInfo() {
 
         List<Object> result = redis.commandInfo(CommandType.GETRANGE, CommandType.SET);
 
-        assertThat(result.size()).isEqualTo(2);
+        assertThat(result).hasSize(2);
 
         List<CommandDetail> commands = CommandDetailParser.parse(result);
         assertThat(commands).hasSameSizeAs(result);
 
         result = redis.commandInfo("a missing command");
 
-        assertThat(result.size()).isEqualTo(0);
+        assertThat(result).hasSize(1).containsNull();
     }
 
     @Test
@@ -208,7 +311,7 @@ public class ServerCommandIntegrationTests extends TestSupport {
         redis.get(key);
         redis.get(key);
         assertThat(redis.configResetstat()).isEqualTo("OK");
-        assertThat(redis.info().contains("keyspace_misses:0")).isTrue();
+        assertThat(redis.info()).contains("keyspace_misses:0");
     }
 
     @Test
@@ -318,8 +421,8 @@ public class ServerCommandIntegrationTests extends TestSupport {
 
     @Test
     void info() {
-        assertThat(redis.info().contains("redis_version")).isTrue();
-        assertThat(redis.info("server").contains("redis_version")).isTrue();
+        assertThat(redis.info()).contains("redis_version");
+        assertThat(redis.info("server")).contains("redis_version");
     }
 
     @Test
@@ -367,7 +470,7 @@ public class ServerCommandIntegrationTests extends TestSupport {
         assertThat(objects.get(1).getClass()).isEqualTo(Long.class);
 
         RedisInstance redisInstance = RoleParser.parse(objects);
-        assertThat(redisInstance.getRole()).isEqualTo(RedisInstance.Role.MASTER);
+        assertThat(redisInstance.getRole().isUpstream()).isTrue();
     }
 
     @Test

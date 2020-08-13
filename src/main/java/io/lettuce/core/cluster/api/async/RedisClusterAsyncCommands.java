@@ -38,7 +38,7 @@ public interface RedisClusterAsyncCommands<K, V> extends BaseRedisAsyncCommands<
         RedisSortedSetAsyncCommands<K, V>, RedisStreamAsyncCommands<K, V>, RedisStringAsyncCommands<K, V> {
 
     /**
-     * Set the default timeout for operations.
+     * Set the default timeout for operations. A zero timeout value indicates to not time out.
      *
      * @param timeout the timeout value
      * @since 5.0
@@ -52,6 +52,16 @@ public interface RedisClusterAsyncCommands<K, V> extends BaseRedisAsyncCommands<
      * @return String simple-string-reply
      */
     RedisFuture<String> auth(CharSequence password);
+
+    /**
+     * Authenticate to the server with username and password. Requires Redis 6 or newer.
+     *
+     * @param username the username
+     * @param password the password
+     * @return String simple-string-reply
+     * @since 6.0
+     */
+    RedisFuture<String> auth(String username, CharSequence password);
 
     /**
      * Generate a new config epoch, incrementing the current epoch, assign the new epoch to this node, WITHOUT any consensus and
@@ -73,7 +83,7 @@ public interface RedisClusterAsyncCommands<K, V> extends BaseRedisAsyncCommands<
     RedisFuture<String> clusterMeet(String ip, int port);
 
     /**
-     * Blacklist and remove the cluster node from the cluster.
+     * Disallow connections and remove the cluster node from the cluster.
      *
      * @param nodeId the node Id
      * @return String simple-string-reply
@@ -81,7 +91,7 @@ public interface RedisClusterAsyncCommands<K, V> extends BaseRedisAsyncCommands<
     RedisFuture<String> clusterForget(String nodeId);
 
     /**
-     * Adds slots to the cluster node. The current node will become the master for the specified slots.
+     * Adds slots to the cluster node. The current node will become the upstream for the specified slots.
      *
      * @param slots one or more slots from {@literal 0} to {@literal 16384}
      * @return String simple-string-reply
@@ -247,7 +257,7 @@ public interface RedisClusterAsyncCommands<K, V> extends BaseRedisAsyncCommands<
     /**
      * Failover a cluster node. Turns the currently connected node into a master and the master into its replica.
      *
-     * @param force do not coordinate with master if {@literal true}
+     * @param force do not coordinate with master if {@code true}
      * @return String simple-string-reply
      */
     RedisFuture<String> clusterFailover(boolean force);
@@ -264,7 +274,7 @@ public interface RedisClusterAsyncCommands<K, V> extends BaseRedisAsyncCommands<
      * <li>If the node was a replica, the whole data set is flushed away</li>
      * </ul>
      *
-     * @param hard {@literal true} for hard reset. Generates a new nodeId and currentEpoch/configEpoch are set to 0
+     * @param hard {@code true} for hard reset. Generates a new nodeId and currentEpoch/configEpoch are set to 0
      * @return String simple-string-reply
      */
     RedisFuture<String> clusterReset(boolean hard);
@@ -277,8 +287,8 @@ public interface RedisClusterAsyncCommands<K, V> extends BaseRedisAsyncCommands<
     RedisFuture<String> clusterFlushslots();
 
     /**
-     * Tells a Redis cluster replica node that the client is ok reading possibly stale data and is not interested in running write
-     * queries.
+     * Tells a Redis cluster replica node that the client is ok reading possibly stale data and is not interested in running
+     * write queries.
      *
      * @return String simple-string-reply
      */
@@ -327,4 +337,5 @@ public interface RedisClusterAsyncCommands<K, V> extends BaseRedisAsyncCommands<
      *         {@code 1} if the all the keys were set. {@code 0} if no key was set (at least one key already existed).
      */
     RedisFuture<Boolean> msetnx(Map<K, V> map);
+
 }

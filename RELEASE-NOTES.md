@@ -1,209 +1,166 @@
-Lettuce 5.2.0 RELEASE NOTES
-===========================
+Lettuce 6.0.0 RC1 RELEASE NOTES
+==============================
 
-The Lettuce team is pleased to announce the Lettuce 5.2.0 release! 
-This release contains new features, bug fixes, and enhancements.
- 
-Most notable changes are:
+The Lettuce team is delighted to announce the availability of the first Lettuce 6 release candidate.
 
-* Sentinel refinements
-* Node randomization when reading from Redis Cluster nodes
-* Codec enhancements
-* Migrated tests to JUnit 5
+Most notable changes that ship with this release are
 
-Find the full changelog at the end of this document that lists all 110 tickets.
-Work for Lettuce 6, the next major release has already started. Lettuce 6 will support RESP3 and should ship in time for Redis 6.
+* Client-side caching support
+* Registration of push message listeners
+* Configuration files for GraalVM Native Image compilation
+* API cleanups/Breaking Changes
 
-Thanks to all contributors who made Lettuce 5.2.0.RELEASE possible.
-Lettuce requires a minimum of Java 8 to build and run and is compatible with Java 13. It is tested continuously against the latest Redis source-build.
+Server-assisted Client-side caching support
+-------------------------------------------
+
+Redis can notify clients about cache invalidations when you use Redis as a read-through cache.
+That is when applications keep a local copy of the cached value and use Redis to back up the local cache before.
+When a cache values gets changed (that were fetched from Redis), then Redis notifies interested clients so they can invalidate their near-cache and potentially fetch the changed value.
+
+Redis 6 allows for tracking clients and sending push messages using RESP3 push messages.
+Lettuce provides a `CacheFrontend` that can be used to interact with a cache.
+
+Client-side caching assumes a near cache that can be queried, updated and evicted for individual keys.
+Cache values are represented as strings and the entire functionality is exposed through a `CacheFrontend`.
+
+See the following example that uses a `ConcurrentHashMap` as near cache and outlines the interaction between involved parties:
+
+```java
+Map<String, String> clientCache = new ConcurrentHashMap<>();
+
+RedisCommands<String, String> otherParty = redisClient.connect().sync();
+
+// creates a key
+otherParty.set(key, value);
+
+StatefulRedisConnection<String, String> myself = redisClient.connect();
+CacheFrontend<String, String> frontend = ClientSideCaching.enable(CacheAccessor.forMap(clientCache), myself,
+        TrackingArgs.Builder.enabled().noloop());
+
+// Read-through into Redis
+String cachedValue = frontend.get(key);
+assertThat(cachedValue).isNotNull();
+
+// client-side cache holds the same value
+assertThat(clientCache).hasSize(1);
+
+// now, the key expires
+commands.pexpire(key, 1);
+
+// a while later
+Thread.sleep(200);
+
+// the expiration reflects in the client-side cache
+assertThat(clientCache).isEmpty();
+
+assertThat(frontend.get(key)).isNull()
+```
+
+Lettuce ships out of the box with a `CacheAccessor` for the `Map` interface.
+You can implement a `CacheAccessor` for your cache if it doesn't implement the `Map` interface.
+Client-side caching support is only supported when using RESP3. The Pub/Sub mode isn't supported through `ClientSideCaching` and we don't support Pub/Sub redirection.
+Since push messages are node-local, client-side caching is supported only on Redis Standalone setups. 
+Master/Replica or Clustering operating modes are not supported as multi-node operations and connection failover impose severe complexity onto key tracking.
+
+Read more: https://redis.io/topics/client-side-caching
+
+Registration of push message listeners
+--------------------------------------
+
+Registration of push message listeners completes Lettuce's RESP3 support. 
+You can register `PushMessage` listeners on Standalone and Redis Cluster connections by implementing `PushListener` respective `RedisClusterPushListener`:
+
+```java 
+connection.addListener(message -> {
+
+    if (message.getType().equals("invalidate")) {
+        invalidations.addAll((List) message.getContent(StringCodec.UTF8::decodeKey).get(1));
+    }
+});
+```
+
+Using push messages with Redis Cluster are subject to node-locality, therefore `RedisClusterPushListener` provides access to the `RedisClusterNode` from which the push message originated.
+
+The content of push messages may consist of arbitrary data structures and vary across various push message types. 
+`PushMessage` exposes the message type and access to its content as `List<Object>`. Bulk content can be decoded into more specific data types.    
+
+We're working towards a GA release in late September.
+We're considering resolving package cycles at this stage, but we're not sure whether we will ship these changes with Lettuce 6 or postpone these to Lettuce 7.  
+Specifically, `RedisFuture`, argument types (all `CompositeArgument` subtypes), `Value` including subtypes, and API  types such as `ScanCursor` would be migrated to their own packages.
+Your application would be impacted as you would be required to review and adjust your imports.   
+
+Thanks to all contributors who made Lettuce 6.0.0.RC1 possible.
+Lettuce requires a minimum of Java 8 to build and run and is compatible with Java 15. It is tested continuously against the latest Redis source-build.
 
 If you need any support, meet Lettuce at
 
-* Google Group (General discussion, announcements, and releases): https://groups.google.com/d/forum/lettuce-redis-client-users
+* Google Group (General discussion, announcements, and releases): https://groups.google.com/g/lettuce-redis-client-users
 or lettuce-redis-client-users@googlegroups.com
 * Stack Overflow (Questions): https://stackoverflow.com/questions/tagged/lettuce
 * Join the chat at https://gitter.im/lettuce-io/Lobby for general discussion
 * GitHub Issues (Bug reports, feature requests): https://github.com/lettuce-io/lettuce-core/issues
-* Documentation: https://lettuce.io/core/5.2.0.RELEASE/reference/
-* Javadoc: https://lettuce.io/core/5.2.0.RELEASE/api/
+* Documentation: https://lettuce.io/core/6.0.0.RC1/reference/
+* Javadoc: https://lettuce.io/core/6.0.0.RC1/api/
 
-Sentinel refinements
-----------------------------------
 
-Since this release, Lettuce can connect to Redis Sentinel using secure sockets (SSL) and can authenticate against Sentinel using passwords.
-To use SSL, enable SSL usage on `RedisURI` the same way how it's done for Redis Standalone and Redis Cluster.
-Lettuce also introduced a new protocol scheme with `rediss-sentinel://`. Please note that enabling SSL enables encryption for both, Sentinel and data node communication.
+API cleanups/Breaking Changes
+-----------------------------
 
-Password authentication follows the same pattern. Setting a password on a Sentinel `RedisURI` enables password authentication for Sentinel and data nodes.
+With this release, we took the opportunity to introduce a series of changes that put the API into a cleaner shape.
 
-Read from random Redis Cluster node
-----------------------------------
-
-Redis Cluster supports now node randomization to avoid excessive usage of individual nodes when reading from these. 
-`ReadFrom` now exposes a `isOrderSensitive()` method to indicate whether a `ReadFrom` setting is order-sensitive or whether respecting order isn't required.
-Custom `ReadFrom` implementations should consider this change. 
-`ReadFrom.ANY` is a newly introduced setting that allows reading from any node (master or a qualified replica) without an ordering preference if multiple replicas qualify for reading.
-
-Codec enhancements
------------------
-
-As of this release, we ship two notable enhancements for codecs:
-
-* `CipherCodec` for transparent encryption and decryption of values.
-* Codec composition through `RedisCodec.of(…)` to set up a composed codec from a key and a value codec.
-
-`CipherCodec` is created by using a delegate codec and `CipherSupplier` for encryption and decryption. Values are encoded first and then encrypted before values are written to Redis.
-
-```java
-SecretKeySpec key = …;
-CipherCodec.CipherSupplier encrypt = new CipherCodec.CipherSupplier() {
-    @Override
-    public Cipher get(CipherCodec.KeyDescriptor keyDescriptor) throws GeneralSecurityException {
-
-        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-        cipher.init(Cipher.DECRYPT_MODE, key);
-        return cipher;
-    }
-};
-
-CipherCodec.CipherSupplier decrypt = (CipherCodec.KeyDescriptor keyDescriptor) -> {
-
-    Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-    cipher.init(Cipher.DECRYPT_MODE, key);
-    return cipher;
-};
-
-RedisCodec<String, String> crypto = CipherCodec.forValues(StringCodec.UTF8, encrypt, decrypt);
-```
-
-`CipherCodec` supports multiple keys to increment key versions and to decrypt values with older key versions. The code above is to illustrate how to construct `CipherCodec` and does not guarantee to outline a secure `Cipher` setup that meets your requirements.
-
-With `RedisCodec.of(…)`, applications can quickly compose a `RedisCodec` of already existing codecs instead of writing an entire codec from scratch. Codec composition is useful to use different codecs for key and value encoding:
-
-```java
-RedisCodec<String, byte[]> composed = RedisCodec.of(StringCodec.ASCII, ByteArrayCodec.INSTANCE);
-```
-
-Read more on Codecs at: https://github.com/lettuce-io/lettuce-core/wiki/Codecs
+* Remove JavaRuntime class and move LettuceStrings to internal package #1329
+* Remove Spring support classes #1358
+* Replace io.lettuce.core.resource.Futures utility with Netty's PromiseCombiner #1283
+* XGROUP DELCONSUMER should return pending message count #1377 (xgroupDelconsumer(…) now returns `Long`)
 
 Commands
-------------
-* Add support for "MEMORY USAGE key [SAMPLES count]" #853 (Thanks to @darkaquarius)
-* Add support for XINFO #996 (Thanks to @Erzhoumu)
-* Add support for XGROUP CREATE … MKSTREAM #898 (Thanks to @wenerme)
+-----------------------------
+
+* Add support for STRALGO #1280
+* Add support for LPOS #1320
 
 Enhancements
 ------------
-* Make adaptive topology refresh better usable for failover/master-slave promotion changes #672 (Thanks to @mudasirale)
-* Allow randomization of read candidates using Redis Cluster #834 (Thanks to @nborole)
-* AsyncExecutions should implement CompletionStage #862
-* BraveTracing should support custom names for the service name #865 (Thanks to @worldtiki)
-* Emit Connection Error events #885 (Thanks to @squishypenguin)
-* Allow usage of publishOn scheduler for reactive signal emission #905
-* Optimize aggregation buffer cleanup in CommandHandler #906 (Thanks to @gavincook)
-* Add shutdown logging to client, ClientResources, and EventLoopGroupProvider #918
-* Add flag to disable reporting of span tags #920 (Thanks to @worldtiki)
-* Optimization: Use Cluster write connections for read commands when using ReadFrom.MASTER #923
-* ByteBuf.release() was not called before it's garbage-collected #930 (Thanks to @zhouzq)
-* Add cipher codec #934
-* Introduce adaptive trigger event #952
-* Deprecate PING on connect option #965
-* Do not require CLIENT LIST in cluster topology refresh #973 (Thanks to @bentharage)
-* Add support for Redis Sentinel authentication #1002 (Thanks to @ssouris)
-* Improve mutators for ClientOptions, ClusterClientOptions, and ClientResources #1003
-* TopologyComparators performance issue #1011 (Thanks to @alessandrosimi-sa)
-* Attach topology retrieval exceptions when Lettuce cannot retrieve a topology update #1024 (Thanks to @StillerRen)
-* Support TLS connections in Sentinel mode #1048 (Thanks to @ae6rt)
-* Reduce object allocations for assertions #1068
-* Reduce object allocations for Cluster topology parsing #1069
-* Support ByteArrayCodec only for values #1122 (Thanks to @dmandalidis)
-* lettuce#ClusterTopologyRefresh is too slow，because of “client list” #1126 (Thanks to @xjs1919)
+
+* Use domain specific value object as return type for xpending. #1229 (Thanks to @christophstrobl)
+* Add template method for EventLoopGroup creation #1273 (Thanks to @konstantin-grits)
+* Add support for Client-side caching #1281
+* Registration of push message listeners  #1284
+* Add charset option to ScanArgs.match(…) #1285 (Thanks to @gejun123456)
+* Allow for more customisation of the tracing span #1303 (Thanks to @JaidenAshmore)
+* Support for GraalVM Native Images #1316 (Thanks to @ilopmar)
+* Consider topology updates for default Cluster connections #1317 (Thanks to @be-hase)
+* SSL handshake doesn't respect timeouts #1326 (Thanks to @feliperuiz)
+* Reduce RedisStateMachine bytecode size #1332 (Thanks to @hellyguo)
+* Feature request: add a cluster-capable version of `flushallAsync` #1359 (Thanks to @jchambers)
+* BoundedAsyncPool object is ready to be manipulated with even though a connection is not created yet #1363 (Thanks to @little-fish)
+* Introduce DecodeBufferPolicy to reduce memory usage #1314 (Thanks to @Shaphan)
 
 Fixes
 -----
-* Unable to reconnect Pub/Sub connection with authorization #868 (Thanks to @maestroua)
-* Reduce allocations in topology comparator #870
-* Fix recordCommandLatency to work properly #874 (Thanks to @jongyeol)
-* Bug: Include hostPortString in the error message #876 (Thanks to @LarryBattle)
-* Reference docs CSS prevents HTTPS usage #878
-* ReactiveCommandSegmentCommandFactory resolves StreamingOutput for all reactive types #879 (Thanks to @yozhag)
-* ClassCastException occurs when executing RedisClusterClient::connectPubSub with global timeout feature #895 (Thanks to @be-hase)
-* Flux that reads from a hash, processes elements and writes to a set, completes prematurely #897 (Thanks to @vkurland)
-* Fixed stackoverflow exception inside CommandLatencyCollectorOptions #899 (Thanks to @LarryBattle)
-* PubSubEndpoint.channels and patterns contain duplicate binary channel/pattern names #911 (Thanks to @lwiddershoven)
-* DefaultCommandMethodVerifier reports invalid parameter count #925 (Thanks to @GhaziTriki)
-* Chunked Pub/Sub message receive with interleaved command responses leaves commands uncompleted #936 (Thanks to @GavinTianYang)
-* Fix typo in log message #970 (Thanks to @twz123)
-* Result is lost when published on another executor #986 (Thanks to @trueinsider)
-* Cancel ClusterTopologyRefreshTask in RedisClusterClient.shutdownAsync() #989 (Thanks to @johnsiu)
-* ClassCastException occurs when using RedisCluster with custom-command-interface and Async API #994 (Thanks to @tamanugi)
-* Application-level exceptions in Pub/Sub notifications mess up pub sub decoding state and cause timeouts #997 (Thanks to @giridharkannan)
-* RedisClient.shutdown hangs because event loops terminate before connections are closed #998 (Thanks to @Poorva17)
-* "Knowing Redis" section in documentation has the wrong link for meanings.  #1050 (Thanks to @Raghaava)
-* ClassCastException occurs when using RedisCommandFactory with custom commands #1075 (Thanks to @mdebellefeuille)
-* EventLoop thread blocked by EmitterProcessor.onNext(…) causes timeouts #1086 (Thanks to @trishaarao79)
-* RedisClusterNode without slots is never considered having same slots as an equal object #1089 (Thanks to @y2klyf)
-* RedisClusterClient doesn't respect the SocketOptions connectTimeout #1119 (Thanks to @magnusandy)
-* Remove duplicated ConnectionWatchdog #1132 (Thanks to @mors741)
+
+* Write race condition while migrating/importing a slot #1218 (Thanks to @phyok)
+* PauseDetector acquisition hang in DefaultCommandLatencyCollector #1300 (Thanks to @ackerL)
+* NullPointerException thrown during AbstractRedisAsyncCommands.flushCommands #1301 (Thanks to @mruki)
+* xpending(K, Consumer, Range, Limit) fails with ERR syntax error using Limit.unlimited() #1302 (Thanks to @nagaran1)
+* Remove duplicated command on asking #1304 (Thanks to @koisyu)
+* ArrayOutput stops response parsing on empty nested arrays #1327 (Thanks to @TheCycoONE)
+* Synchronous dispatch of MULTI returns null #1335 (Thanks to @tzxyz)
+* RedisAdvancedClusterAsyncCommandsImpl scriptKill is incorrectly calling scriptFlush #1340 (Thanks to @azhukayak)
+* RedisAdvancedClusterAsyncCommands.scriptKill now calls scriptKill instead of scriptFlush #1341 (Thanks to @dengliming)
+* Lingering topology refresh connections when using dynamic refresh sources #1342 (Thanks to @tpf1994)
+* Wrong cast in StringCodec may lead to IndexOutOfBoundsException #1367 (Thanks to @dmandalidis)
+* xpending(key, group) fails without pending messages #1378
 
 Other
 -----
-* Migrate tests to JUnit 5 #430
-* Could not generate CGLIB subclass of class io.lettuce.core.support.ConnectionPoolSupport$1 #843 (Thanks to @peerit12)
-* Adapt to changed terminology for master/replica #845
-* Ability to provide a custom service name for spans #866 (Thanks to @worldtiki)
-* Remove tempusfugit dependency #871
-* Makefile refactor download redis #877 (Thanks to @LarryBattle)
-* Upgrade to Reactor Californium SR1 #883
-* Upgrade to Redis 5 GA #893
-* Document MasterSlave connection behavior on partial node failures #894 (Thanks to @jocull)
-* Upgrade to RxJava 2.2.3 #901
-* Upgrade to Spring Framework 4.3.20.RELEASE #902
-* Upgrade to netty 4.1.30.Final #903
-* Upgrade to Reactor Core 3.2.2.RELEASE #904
-* Deprecate StatefulConnection.reset() #907 (Thanks to @semberal)
-* Upgrade to Reactor Core 3.2.3.RELEASE #931
-* Upgrade to netty 4.1.31.Final #932
-* Upgrade to RxJava 2.2.4 #933
-* Javadoc is missing Javadoc links to Project Reactor types (Flux, Mono) #942
-* Extend year range for 2019 in license headers #950
-* Use ConcurrentHashMap.newKeySet() as replacement of Netty's ConcurrentSet #961
-* Streamline communication sections in readme, issue templates and contribution guide #967
-* Upgrade to stunnel 5.50 #968
-* Replace old reactive API docs #974 (Thanks to @pine)
-* Upgrade to Reactor 3.2.6.RELEASE #975
-* Upgrade to netty 4.1.33.Final #976
-* Upgrade to HdrHistogram 2.1.11 #978
-* Upgrade to RxJava 2.2.6 #979
-* Use JUnit BOM for dependency management and upgrade to JUnit 5.4.0 #980
-* Use logj42 BOM for dependency management and upgrade to 2.11.2 #981
-* Upgrade to AssertJ 3.12.0 #983
-* Upgrade to AssertJ 3.12.1 #991
-* Upgrade to Reactor Core 3.2.8.RELEASE #1006
-* Upgrade to netty 4.1.35.Final #1017
-* Upgrade to Reactor Core 3.3 #1030
-* Upgrade to Brave 5.6 #1031
-* Migrate off TopicProcessor to EmitterProcessor #1032
-* Upgrade to Netty 4.1.36.Final #1033
-* Upgrade to JUnit 5.4.2 #1034
-* Upgrade to Mockito 2.27.0 #1035
-* Upgrade to RxJava 2.2.8 #1036
-* Upgrade build plugin dependencies #1037
-* RedisURI: fix missing "the" in Javadoc #1049 (Thanks to @perlun)
-* Upgrade to RxJava 2.2.9 #1054
-* Upgrade to jsr305 3.0.2 #1055
-* Upgrade TravisCI build to Xenial/Java 11 #1056
-* Upgrade to OpenWebBeans 2.0.11 #1062
-* Simplify Redis…CommandsImpl to accept connection interfaces #1077
-* Upgrade to netty 4.1.38.Final #1093
-* Upgrade to Reactor Core 3.2.11.RELEASE #1094
-* Upgrade to Mockito 3.0 #1095
-* Upgrade to JUnit 5.5.1 #1096
-* Upgrade to Brave 5.6.9 #1097
-* Update plugin versions #1098
-* Upgrade to Commons Pool 2.7.0 #1099
-* Make ListSubscriber public #1103 (Thanks to @jruaux)
-* Upgrade to netty 4.1.42.Final #1131
-* Add default manifest entries and automatic module name #1135
-* Upgrade to Brave 5.7.0 #1136
-* Deprecate Utf8StringCodec in favor or StringCodec.UTF8 #1137
+
+* Upgrade dependencies #1305
+* Add FAQ section to reference docs #1307
+* Rename master branch to main #1308
+* Consistently use Javadoc wording in BoundedPoolConfig.Builder #1337 (Thanks to @maestroua)
+* Upgrade to Reactor Core 3.3.8.RELEASE #1353
+* Upgrade to netty 4.1.51.Final #1354
+* Consistently translate execution exceptions #1370
+* Upgrade to RxJava 3.0.5 #1374
+* Upgrade to Commons Pool 2.8.1 #1375

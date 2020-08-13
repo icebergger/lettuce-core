@@ -106,6 +106,7 @@ class AsyncExecutionsImpl<T> implements AsyncExecutions<T> {
         return stage;
     }
 
+    @SuppressWarnings("rawtypes")
     private CompletableFuture<List<T>> createPublicStage(Map<RedisClusterNode, CompletableFuture<T>> map) {
 
         return CompletableFuture.allOf(map.values().toArray(new CompletableFuture[0])).thenApply(ignore -> {
@@ -225,7 +226,8 @@ class AsyncExecutionsImpl<T> implements AsyncExecutions<T> {
     }
 
     @Override
-    public <U> CompletionStage<U> applyToEitherAsync(CompletionStage<? extends List<T>> other, Function<? super List<T>, U> fn) {
+    public <U> CompletionStage<U> applyToEitherAsync(CompletionStage<? extends List<T>> other,
+            Function<? super List<T>, U> fn) {
         return publicStage().applyToEitherAsync(other, fn);
     }
 
@@ -277,7 +279,8 @@ class AsyncExecutionsImpl<T> implements AsyncExecutions<T> {
     }
 
     @Override
-    public <U> CompletionStage<U> thenComposeAsync(Function<? super List<T>, ? extends CompletionStage<U>> fn, Executor executor) {
+    public <U> CompletionStage<U> thenComposeAsync(Function<? super List<T>, ? extends CompletionStage<U>> fn,
+            Executor executor) {
         return publicStage().thenComposeAsync(fn, executor);
     }
 
@@ -297,7 +300,8 @@ class AsyncExecutionsImpl<T> implements AsyncExecutions<T> {
     }
 
     @Override
-    public CompletionStage<List<T>> whenCompleteAsync(BiConsumer<? super List<T>, ? super Throwable> action, Executor executor) {
+    public CompletionStage<List<T>> whenCompleteAsync(BiConsumer<? super List<T>, ? super Throwable> action,
+            Executor executor) {
         return publicStage().whenCompleteAsync(action, executor);
     }
 
@@ -320,4 +324,5 @@ class AsyncExecutionsImpl<T> implements AsyncExecutions<T> {
     public CompletableFuture<List<T>> toCompletableFuture() {
         return publicStage().toCompletableFuture();
     }
+
 }

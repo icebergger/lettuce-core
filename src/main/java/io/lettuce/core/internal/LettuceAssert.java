@@ -18,8 +18,6 @@ package io.lettuce.core.internal;
 import java.util.Collection;
 import java.util.function.Supplier;
 
-import io.lettuce.core.LettuceStrings;
-
 /**
  * Assertion utility class that assists in validating arguments. This class is part of the internal API and may change without
  * further notice.
@@ -199,7 +197,7 @@ public class LettuceAssert {
     }
 
     /**
-     * Assert that {@code value} is {@literal true}.
+     * Assert that {@code value} is {@code true}.
      *
      * @param value the value to check
      * @param message the exception message to use if the assertion fails
@@ -212,7 +210,7 @@ public class LettuceAssert {
     }
 
     /**
-     * Assert that {@code value} is {@literal true}.
+     * Assert that {@code value} is {@code true}.
      *
      * @param value the value to check
      * @param messageSupplier the exception message supplier to use if the assertion fails
@@ -253,4 +251,5 @@ public class LettuceAssert {
             throw new IllegalStateException(messageSupplier.get());
         }
     }
+
 }

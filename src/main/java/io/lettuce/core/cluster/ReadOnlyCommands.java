@@ -38,8 +38,8 @@ class ReadOnlyCommands {
     }
 
     /**
-     * @param protocolKeyword must not be {@literal null}.
-     * @return {@literal true} if {@link ProtocolKeyword} is a read-only command.
+     * @param protocolKeyword must not be {@code null}.
+     * @return {@code true} if {@link ProtocolKeyword} is a read-only command.
      */
     public static boolean isReadOnlyCommand(ProtocolKeyword protocolKeyword) {
         return READ_ONLY_COMMANDS.contains(protocolKeyword);
@@ -54,15 +54,18 @@ class ReadOnlyCommands {
 
     enum CommandName {
         ASKING, BITCOUNT, BITPOS, CLIENT, COMMAND, DUMP, ECHO, EVAL, EVALSHA, EXISTS, //
-        GEODIST, GEOPOS, GEORADIUS, GEORADIUSBYMEMBER, GEOHASH, GET, GETBIT, //
+        GEODIST, GEOPOS, GEORADIUS, GEORADIUS_RO, GEORADIUSBYMEMBER, GEORADIUSBYMEMBER_RO, GEOHASH, GET, GETBIT, //
         GETRANGE, HEXISTS, HGET, HGETALL, HKEYS, HLEN, HMGET, HSCAN, HSTRLEN, //
-        HVALS, INFO, KEYS, LINDEX, LLEN, LRANGE, MGET, PFCOUNT, PTTL, //
+        HVALS, INFO, KEYS, LINDEX, LLEN, LPOS, LRANGE, MGET, PFCOUNT, PTTL, //
         RANDOMKEY, READWRITE, SCAN, SCARD, SCRIPT, //
         SDIFF, SINTER, SISMEMBER, SMEMBERS, SRANDMEMBER, SSCAN, STRLEN, //
-        SUNION, TIME, TTL, TYPE, ZCARD, ZCOUNT, ZLEXCOUNT, ZRANGE, //
+        SUNION, TIME, TTL, TYPE, //
+        XINFO, XLEN, XPENDING, XRANGE, XREVRANGE, XREAD, //
+        ZCARD, ZCOUNT, ZLEXCOUNT, ZRANGE, //
         ZRANGEBYLEX, ZRANGEBYSCORE, ZRANK, ZREVRANGE, ZREVRANGEBYLEX, ZREVRANGEBYSCORE, ZREVRANK, ZSCAN, ZSCORE, //
 
         // Pub/Sub commands are no key-space commands so they are safe to execute on replica nodes
         PUBLISH, PUBSUB, PSUBSCRIBE, PUNSUBSCRIBE, SUBSCRIBE, UNSUBSCRIBE
     }
+
 }

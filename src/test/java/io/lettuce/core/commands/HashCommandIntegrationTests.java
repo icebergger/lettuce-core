@@ -38,8 +38,11 @@ import io.lettuce.test.ListStreamingAdapter;
 import io.lettuce.test.condition.EnabledOnCommand;
 
 /**
+ * Integration tests for {@link io.lettuce.core.api.sync.RedisHashCommands}.
+ *
  * @author Will Glozer
  * @author Mark Paluch
+ * @author Hodur Heidarsson
  */
 @ExtendWith(LettuceExtension.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -221,6 +224,19 @@ public class HashCommandIntegrationTests extends TestSupport {
     void hset() {
         assertThat(redis.hset(key, "one", "1")).isTrue();
         assertThat(redis.hset(key, "one", "1")).isFalse();
+    }
+
+    @Test
+    @EnabledOnCommand("UNLINK") // version guard for Redis 4
+    void hsetMap() {
+        Map<String, String> hash = new LinkedHashMap<>();
+        hash.put("two", "2");
+        hash.put("three", "3");
+        assertThat(redis.hset(key, hash)).isEqualTo(2);
+
+        hash.put("two", "second");
+        assertThat(redis.hset(key, hash)).isEqualTo(0);
+        assertThat(redis.hget(key, "two")).isEqualTo("second");
     }
 
     @Test

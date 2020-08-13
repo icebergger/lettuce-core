@@ -35,8 +35,11 @@ import io.lettuce.core.protocol.CommandType;
 public class MigrateArgs<K> implements CompositeArgument {
 
     private boolean copy = false;
+
     private boolean replace = false;
+
     List<K> keys = new ArrayList<>();
+
     private char[] password;
 
     /**
@@ -73,7 +76,7 @@ public class MigrateArgs<K> implements CompositeArgument {
         /**
          * Creates new {@link MigrateArgs} setting a {@code key} to migrate.
          *
-         * @param key must not be {@literal null}.
+         * @param key must not be {@code null}.
          * @return new {@link MigrateArgs} for {@code key} to migrate.
          * @see MigrateArgs#key(Object)
          */
@@ -84,7 +87,7 @@ public class MigrateArgs<K> implements CompositeArgument {
         /**
          * Creates new {@link MigrateArgs} setting {@code keys} to migrate.
          *
-         * @param keys must not be {@literal null}.
+         * @param keys must not be {@code null}.
          * @return new {@link MigrateArgs} for {@code keys} to migrate.
          * @see MigrateArgs#keys(Object[])
          */
@@ -96,7 +99,7 @@ public class MigrateArgs<K> implements CompositeArgument {
         /**
          * Creates new {@link MigrateArgs} setting {@code keys} to migrate.
          *
-         * @param keys must not be {@literal null}.
+         * @param keys must not be {@code null}.
          * @return new {@link MigrateArgs} for {@code keys} to migrate.
          * @see MigrateArgs#keys(Iterable)
          */
@@ -112,6 +115,7 @@ public class MigrateArgs<K> implements CompositeArgument {
          * @see MigrateArgs#auth(CharSequence)
          */
         public static <K> MigrateArgs<K> auth(CharSequence password) {
+            // TODO : implement auth(username,password) when https://github.com/antirez/redis/pull/7035 is fixed
             return new MigrateArgs<K>().auth(password);
         }
 
@@ -125,6 +129,7 @@ public class MigrateArgs<K> implements CompositeArgument {
         public static <K> MigrateArgs<K> auth(char[] password) {
             return new MigrateArgs<K>().auth(password);
         }
+
     }
 
     /**
@@ -150,7 +155,7 @@ public class MigrateArgs<K> implements CompositeArgument {
     /**
      * Migrate a single {@code key}.
      *
-     * @param key must not be {@literal null}.
+     * @param key must not be {@code null}.
      * @return {@code this} {@link MigrateArgs}.
      */
     public MigrateArgs<K> key(K key) {
@@ -164,7 +169,7 @@ public class MigrateArgs<K> implements CompositeArgument {
     /**
      * Migrate one or more {@code keys}.
      *
-     * @param keys must not be {@literal null}.
+     * @param keys must not be {@code null}.
      * @return {@code this} {@link MigrateArgs}.
      */
     @SafeVarargs
@@ -179,7 +184,7 @@ public class MigrateArgs<K> implements CompositeArgument {
     /**
      * Migrate one or more {@code keys}.
      *
-     * @param keys must not be {@literal null}.
+     * @param keys must not be {@code null}.
      * @return {@code this} {@link MigrateArgs}.
      */
     public MigrateArgs<K> keys(Iterable<K> keys) {
@@ -193,7 +198,7 @@ public class MigrateArgs<K> implements CompositeArgument {
     /**
      * Set {@literal AUTH} {@code password} option.
      *
-     * @param password must not be {@literal null}.
+     * @param password must not be {@code null}.
      * @return {@code this} {@link MigrateArgs}.
      * @since 4.4.5
      */
@@ -214,7 +219,7 @@ public class MigrateArgs<K> implements CompositeArgument {
     /**
      * Set {@literal AUTH} {@code password} option.
      *
-     * @param password must not be {@literal null}.
+     * @param password must not be {@code null}.
      * @return {@code this} {@link MigrateArgs}.
      * @since 4.4.5
      */
@@ -246,4 +251,5 @@ public class MigrateArgs<K> implements CompositeArgument {
             args.addKeys((List<K>) keys);
         }
     }
+
 }

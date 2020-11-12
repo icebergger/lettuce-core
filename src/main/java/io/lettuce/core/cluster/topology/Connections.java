@@ -27,15 +27,21 @@ import io.lettuce.core.protocol.Command;
 import io.lettuce.core.protocol.CommandArgs;
 import io.lettuce.core.protocol.CommandKeyword;
 import io.lettuce.core.protocol.CommandType;
+import io.netty.util.internal.logging.InternalLogger;
+import io.netty.util.internal.logging.InternalLoggerFactory;
 
 /**
+ *
  * @author Mark Paluch
  * @author Christian Weitendorf
  * @author Xujs
  */
 class Connections {
 
+    private final static InternalLogger LOG = InternalLoggerFactory.getInstance(Connections.class);
+
     private final Map<RedisURI, StatefulRedisConnection<String, String>> connections;
+
     private volatile boolean closed = false;
 
     public Connections() {
@@ -47,7 +53,7 @@ class Connections {
     }
 
     /**
-     * Add a connection for a {@link RedisURI}
+     * Add a connection for a {@link RedisURI}.
      *
      * @param redisURI
      * @param connection
@@ -71,7 +77,8 @@ class Connections {
     }
 
     /**
-     * @return {@literal true} if no connections present.
+     *
+     * @return {@code true} if no connections present.
      */
     public boolean isEmpty() {
         synchronized (this.connections) {
@@ -81,7 +88,6 @@ class Connections {
 
     /*
      * Initiate {@code CLUSTER NODES} on all connections and return the {@link Requests}.
-     *
      * @return the {@link Requests}.
      */
     public Requests requestTopology() {
@@ -106,7 +112,6 @@ class Connections {
 
     /*
      * Initiate {@code INFO CLIENTS} on all connections and return the {@link Requests}.
-     *
      * @return the {@link Requests}.
      */
     public Requests requestClients() {
@@ -186,10 +191,21 @@ class Connections {
             synchronized (discoveredConnections.connections) {
 
                 result.putAll(this.connections);
-                result.putAll(discoveredConnections.connections);
+
+                for (RedisURI redisURI : discoveredConnections.connections.keySet()) {
+
+                    StatefulRedisConnection<String, String> existing = result.put(redisURI,
+                            discoveredConnections.connections.get(redisURI));
+
+                    if (existing != null) {
+                        LOG.error("Duplicate topology refresh connection for " + redisURI);
+                        existing.closeAsync();
+                    }
+                }
             }
         }
 
         return new Connections(result);
     }
+
 }

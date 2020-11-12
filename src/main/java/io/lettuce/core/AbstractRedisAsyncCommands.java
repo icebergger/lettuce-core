@@ -49,7 +49,9 @@ public abstract class AbstractRedisAsyncCommands<K, V> implements RedisHashAsync
         RedisGeoAsyncCommands<K, V>, RedisClusterAsyncCommands<K, V> {
 
     private final StatefulConnection<K, V> connection;
+
     private final RedisCodec<K, V> codec;
+
     private final RedisCommandBuilder<K, V> commandBuilder;
 
     /**
@@ -179,6 +181,11 @@ public abstract class AbstractRedisAsyncCommands<K, V> implements RedisHashAsync
     @Override
     public RedisFuture<String> clientList() {
         return dispatch(commandBuilder.clientList());
+    }
+
+    @Override
+    public RedisFuture<Long> clientId() {
+        return dispatch(commandBuilder.clientId());
     }
 
     @Override
@@ -772,6 +779,11 @@ public abstract class AbstractRedisAsyncCommands<K, V> implements RedisHashAsync
     }
 
     @Override
+    public RedisFuture<Long> hset(K key, Map<K, V> map) {
+        return dispatch(commandBuilder.hset(key, map));
+    }
+
+    @Override
     public RedisFuture<Boolean> hsetnx(K key, K field, V value) {
         return dispatch(commandBuilder.hsetnx(key, field, value));
     }
@@ -854,6 +866,26 @@ public abstract class AbstractRedisAsyncCommands<K, V> implements RedisHashAsync
     @Override
     public RedisFuture<V> lpop(K key) {
         return dispatch(commandBuilder.lpop(key));
+    }
+
+    @Override
+    public RedisFuture<Long> lpos(K key, V value) {
+        return lpos(key, value, null);
+    }
+
+    @Override
+    public RedisFuture<Long> lpos(K key, V value, LPosArgs args) {
+        return dispatch(commandBuilder.lpos(key, value, args));
+    }
+
+    @Override
+    public RedisFuture<List<Long>> lpos(K key, V value, int count) {
+        return lpos(key, value, count, null);
+    }
+
+    @Override
+    public RedisFuture<List<Long>> lpos(K key, V value, int count, LPosArgs args) {
+        return dispatch(commandBuilder.lpos(key, value, count, args));
     }
 
     @Override
@@ -1040,7 +1072,7 @@ public abstract class AbstractRedisAsyncCommands<K, V> implements RedisHashAsync
     }
 
     @Override
-    public RedisFuture<V> randomkey() {
+    public RedisFuture<K> randomkey() {
         return dispatch(commandBuilder.randomkey());
     }
 
@@ -1403,7 +1435,8 @@ public abstract class AbstractRedisAsyncCommands<K, V> implements RedisHashAsync
     }
 
     @Override
-    public RedisFuture<StreamScanCursor> sscan(ValueStreamingChannel<V> channel, K key, ScanCursor scanCursor, ScanArgs scanArgs) {
+    public RedisFuture<StreamScanCursor> sscan(ValueStreamingChannel<V> channel, K key, ScanCursor scanCursor,
+            ScanArgs scanArgs) {
         return dispatch(commandBuilder.sscanStreaming(channel, key, scanCursor, scanArgs));
     }
 
@@ -1415,6 +1448,11 @@ public abstract class AbstractRedisAsyncCommands<K, V> implements RedisHashAsync
     @Override
     public RedisFuture<Long> strlen(K key) {
         return dispatch(commandBuilder.strlen(key));
+    }
+
+    @Override
+    public RedisFuture<StringMatchResult> stralgoLcs(StrAlgoArgs args) {
+        return dispatch(commandBuilder.stralgoLcs(args));
     }
 
     @Override
@@ -1848,7 +1886,8 @@ public abstract class AbstractRedisAsyncCommands<K, V> implements RedisHashAsync
     }
 
     @Override
-    public RedisFuture<Long> zrangebyscore(ValueStreamingChannel<V> channel, K key, Range<? extends Number> range, Limit limit) {
+    public RedisFuture<Long> zrangebyscore(ValueStreamingChannel<V> channel, K key, Range<? extends Number> range,
+            Limit limit) {
         return dispatch(commandBuilder.zrangebyscore(channel, key, range, limit));
     }
 
@@ -2065,12 +2104,14 @@ public abstract class AbstractRedisAsyncCommands<K, V> implements RedisHashAsync
     }
 
     @Override
-    public RedisFuture<List<ScoredValue<V>>> zrevrangebyscoreWithScores(K key, double max, double min, long offset, long count) {
+    public RedisFuture<List<ScoredValue<V>>> zrevrangebyscoreWithScores(K key, double max, double min, long offset,
+            long count) {
         return dispatch(commandBuilder.zrevrangebyscoreWithScores(key, max, min, offset, count));
     }
 
     @Override
-    public RedisFuture<List<ScoredValue<V>>> zrevrangebyscoreWithScores(K key, String max, String min, long offset, long count) {
+    public RedisFuture<List<ScoredValue<V>>> zrevrangebyscoreWithScores(K key, String max, String min, long offset,
+            long count) {
         return dispatch(commandBuilder.zrevrangebyscoreWithScores(key, max, min, offset, count));
     }
 
@@ -2173,4 +2214,5 @@ public abstract class AbstractRedisAsyncCommands<K, V> implements RedisHashAsync
     public RedisFuture<Long> zunionstore(K destination, ZStoreArgs storeArgs, K... keys) {
         return dispatch(commandBuilder.zunionstore(destination, storeArgs, keys));
     }
+
 }

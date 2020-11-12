@@ -58,6 +58,7 @@ import io.lettuce.core.protocol.CommandType;
  * @param <K> Key type.
  * @param <V> Value type.
  * @author Mark Paluch
+ * @author Jon Chambers
  * @since 3.3
  */
 @SuppressWarnings("unchecked")
@@ -206,6 +207,11 @@ public class RedisAdvancedClusterAsyncCommandsImpl<K, V> extends AbstractRedisAs
     @Override
     public RedisFuture<String> flushall() {
         return MultiNodeExecution.firstOfAsync(executeOnMasters(RedisServerAsyncCommands::flushall));
+    }
+
+    @Override
+    public RedisFuture<String> flushallAsync() {
+        return MultiNodeExecution.firstOfAsync(executeOnMasters(RedisServerAsyncCommands::flushallAsync));
     }
 
     @Override
@@ -392,13 +398,13 @@ public class RedisAdvancedClusterAsyncCommandsImpl<K, V> extends AbstractRedisAs
     }
 
     @Override
-    public RedisFuture<V> randomkey() {
+    public RedisFuture<K> randomkey() {
 
         Partitions partitions = getStatefulConnection().getPartitions();
         int index = ThreadLocalRandom.current().nextInt(partitions.size());
         RedisClusterNode partition = partitions.getPartition(index);
 
-        CompletableFuture<V> future = getConnectionAsync(partition.getUri().getHost(), partition.getUri().getPort())
+        CompletableFuture<K> future = getConnectionAsync(partition.getUri().getHost(), partition.getUri().getPort())
                 .thenCompose(RedisKeyAsyncCommands::randomkey);
 
         return new PipelinedRedisFuture<>(future);
@@ -415,7 +421,7 @@ public class RedisAdvancedClusterAsyncCommandsImpl<K, V> extends AbstractRedisAs
     @Override
     public RedisFuture<String> scriptKill() {
 
-        Map<String, CompletableFuture<String>> executions = executeOnNodes(RedisScriptingAsyncCommands::scriptFlush,
+        Map<String, CompletableFuture<String>> executions = executeOnNodes(RedisScriptingAsyncCommands::scriptKill,
                 redisClusterNode -> true);
         return MultiNodeExecution.alwaysOkOfAsync(executions);
     }
@@ -602,10 +608,10 @@ public class RedisAdvancedClusterAsyncCommandsImpl<K, V> extends AbstractRedisAs
     }
 
     /**
-     * Run a command on all available masters,
+     * Run a command on all available masters,.
      *
-     * @param function function producing the command
-     * @param <T> result type
+     * @param function function producing the command.
+     * @param <T> result type.
      * @return map of a key (counter) and commands.
      */
     protected <T> Map<String, CompletableFuture<T>> executeOnMasters(
@@ -616,9 +622,9 @@ public class RedisAdvancedClusterAsyncCommandsImpl<K, V> extends AbstractRedisAs
     /**
      * Run a command on all available nodes that match {@code filter}.
      *
-     * @param function function producing the command
-     * @param filter filter function for the node selection
-     * @param <T> result type
+     * @param function function producing the command.
+     * @param filter filter function for the node selection.
+     * @param <T> result type.
      * @return map of a key (counter) and commands.
      */
     protected <T> Map<String, CompletableFuture<T>> executeOnNodes(
@@ -665,7 +671,6 @@ public class RedisAdvancedClusterAsyncCommandsImpl<K, V> extends AbstractRedisAs
 
     /**
      * Perform a SCAN in the cluster.
-     *
      */
     static <T extends ScanCursor, K, V> RedisFuture<T> clusterScan(StatefulRedisClusterConnection<K, V> connection,
             ScanCursor cursor, BiFunction<RedisKeyAsyncCommands<K, V>, ScanCursor, RedisFuture<T>> scanFunction,
@@ -678,4 +683,5 @@ public class RedisAdvancedClusterAsyncCommandsImpl<K, V> extends AbstractRedisAs
         RedisFuture<T> scanCursor = scanFunction.apply(connection.getConnection(currentNodeId).async(), continuationCursor);
         return mapper.map(nodeIds, currentNodeId, scanCursor);
     }
+
 }

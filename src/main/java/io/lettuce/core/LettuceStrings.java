@@ -1,11 +1,11 @@
 /*
- * Copyright 2011-2020 the original author or authors.
+ * Copyright 2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      https://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -28,7 +28,9 @@ import io.lettuce.core.codec.Base16;
  *
  * @author Mark Paluch
  * @since 3.0
+ * @deprecated since 5.3.2, this class will move into {@code io.lettuce.core.internal} with Lettuce 6.
  */
+@Deprecated
 public class LettuceStrings {
 
     /**
@@ -41,8 +43,8 @@ public class LettuceStrings {
     /**
      * Checks if a CharSequence is empty ("") or null.
      *
-     * @param cs the char sequence
-     * @return true if empty
+     * @param cs the char sequence.
+     * @return {@code true} if empty.
      */
     public static boolean isEmpty(final CharSequence cs) {
         return cs == null || cs.length() == 0;
@@ -51,9 +53,8 @@ public class LettuceStrings {
     /**
      * Checks if a CharSequence is not empty ("") and not null.
      *
-     * @param cs the char sequence
-     * @return true if not empty
-     *
+     * @param cs the char sequence.
+     * @return {@code true} if not empty.
      */
     public static boolean isNotEmpty(final CharSequence cs) {
         return !isEmpty(cs);
@@ -64,7 +65,7 @@ public class LettuceStrings {
      * {@code -inf}.
      *
      * @param n the double.
-     * @return string representation of {@code n}
+     * @return string representation of {@code n}.
      */
     public static String string(double n) {
         if (Double.isInfinite(n)) {
@@ -75,9 +76,9 @@ public class LettuceStrings {
 
     /**
      * Convert {@link String} to {@code double}. If {@code s} is {@literal +inf}/{@literal -inf}, returns positive/negative
-     * infinity.
+     * infinity. If {@code s} is {@literal +nan}/{@literal -nan}, returns NaN.
      *
-     * @param s string representation of the number
+     * @param s string representation of the number.
      * @return the {@code double} value.
      * @since 4.3.3
      */
@@ -91,14 +92,18 @@ public class LettuceStrings {
             return Double.NEGATIVE_INFINITY;
         }
 
+        if ("-nan".equals(s) || "nan".equals(s) || "+nan".equals(s)) {
+            return Double.NaN;
+        }
+
         return Double.parseDouble(s);
     }
 
     /**
      * Create SHA1 digest from Lua script.
      *
-     * @param script the script
-     * @return the Base16 encoded SHA1 value
+     * @param script the script.
+     * @return the Base16 encoded SHA1 value.
      */
     public static String digest(byte[] script) {
         return digest(ByteBuffer.wrap(script));
@@ -107,8 +112,8 @@ public class LettuceStrings {
     /**
      * Create SHA1 digest from Lua script.
      *
-     * @param script the script
-     * @return the Base16 encoded SHA1 value
+     * @param script the script.
+     * @return the Base16 encoded SHA1 value.
      */
     public static String digest(ByteBuffer script) {
         try {
@@ -125,9 +130,9 @@ public class LettuceStrings {
      * <p>
      * Useful for {@code toString()} implementations.
      *
-     * @param arr the array to display
-     * @param delim the delimiter to use (typically a ",")
-     * @return the delimited {@code String}
+     * @param arr the array to display.
+     * @param delim the delimiter to use (typically a ",").
+     * @return the delimited {@code String}.
      */
     public static String arrayToDelimitedString(Object[] arr, String delim) {
 
@@ -154,11 +159,11 @@ public class LettuceStrings {
      * <p>
      * Useful for {@code toString()} implementations.
      *
-     * @param coll the {@code Collection} to convert
-     * @param delim the delimiter to use (typically a ",")
-     * @param prefix the {@code String} to start each element with
-     * @param suffix the {@code String} to end each element with
-     * @return the delimited {@code String}
+     * @param coll the {@code Collection} to convert.
+     * @param delim the delimiter to use (typically a ",").
+     * @param prefix the {@code String} to start each element with.
+     * @param suffix the {@code String} to end each element with.
+     * @return the delimited {@code String}.
      */
     public static String collectionToDelimitedString(Collection<?> coll, String delim, String prefix, String suffix) {
 
@@ -176,4 +181,5 @@ public class LettuceStrings {
         }
         return sb.toString();
     }
+
 }

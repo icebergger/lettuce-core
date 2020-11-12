@@ -55,6 +55,7 @@ import io.lettuce.core.output.KeyValueStreamingChannel;
  * @param <K> Key type.
  * @param <V> Value type.
  * @author Mark Paluch
+ * @author Jon Chambers
  * @since 4.0
  */
 public class RedisAdvancedClusterReactiveCommandsImpl<K, V> extends AbstractRedisReactiveCommands<K, V>
@@ -195,6 +196,13 @@ public class RedisAdvancedClusterReactiveCommandsImpl<K, V> extends AbstractRedi
     public Mono<String> flushall() {
 
         Map<String, Publisher<String>> publishers = executeOnMasters(RedisServerReactiveCommands::flushall);
+        return Flux.merge(publishers.values()).last();
+    }
+
+    @Override
+    public Mono<String> flushallAsync() {
+
+        Map<String, Publisher<String>> publishers = executeOnMasters(RedisServerReactiveCommands::flushallAsync);
         return Flux.merge(publishers.values()).last();
     }
 
@@ -347,7 +355,7 @@ public class RedisAdvancedClusterReactiveCommandsImpl<K, V> extends AbstractRedi
     }
 
     @Override
-    public Mono<V> randomkey() {
+    public Mono<K> randomkey() {
 
         Partitions partitions = getStatefulConnection().getPartitions();
         int index = ThreadLocalRandom.current().nextInt(partitions.size());
@@ -364,7 +372,7 @@ public class RedisAdvancedClusterReactiveCommandsImpl<K, V> extends AbstractRedi
 
     @Override
     public Mono<String> scriptKill() {
-        Map<String, Publisher<String>> publishers = executeOnNodes(RedisScriptingReactiveCommands::scriptFlush, ALL_NODES);
+        Map<String, Publisher<String>> publishers = executeOnNodes(RedisScriptingReactiveCommands::scriptKill, ALL_NODES);
         return Flux.merge(publishers.values()).onErrorReturn("OK").last();
     }
 
@@ -525,10 +533,10 @@ public class RedisAdvancedClusterReactiveCommandsImpl<K, V> extends AbstractRedi
     }
 
     /**
-     * Run a command on all available masters,
+     * Run a command on all available masters,.
      *
-     * @param function function producing the command
-     * @param <T> result type
+     * @param function function producing the command.
+     * @param <T> result type.
      * @return map of a key (counter) and commands.
      */
     protected <T> Map<String, Publisher<T>> executeOnMasters(
@@ -539,9 +547,9 @@ public class RedisAdvancedClusterReactiveCommandsImpl<K, V> extends AbstractRedi
     /**
      * Run a command on all available nodes that match {@code filter}.
      *
-     * @param function function producing the command
-     * @param filter filter function for the node selection
-     * @param <T> result type
+     * @param function function producing the command.
+     * @param filter filter function for the node selection.
+     * @param <T> result type.
      * @return map of a key (counter) and commands.
      */
     protected <T> Map<String, Publisher<T>> executeOnNodes(
@@ -589,7 +597,6 @@ public class RedisAdvancedClusterReactiveCommandsImpl<K, V> extends AbstractRedi
 
     /**
      * Perform a SCAN in the cluster.
-     *
      */
     static <T extends ScanCursor, K, V> Mono<T> clusterScan(StatefulRedisClusterConnection<K, V> connection,
             AsyncClusterConnectionProvider connectionProvider, ScanCursor cursor,
@@ -608,4 +615,5 @@ public class RedisAdvancedClusterReactiveCommandsImpl<K, V> extends AbstractRedi
     private static <T> Mono<T> getMono(CompletableFuture<T> future) {
         return Mono.fromCompletionStage(future);
     }
+
 }

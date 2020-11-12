@@ -37,7 +37,7 @@ public enum CommandType implements ProtocolKeyword {
 
     // String
 
-    APPEND, GET, GETRANGE, GETSET, MGET, MSET, MSETNX, SET, SETEX, PSETEX, SETNX, SETRANGE, STRLEN,
+    APPEND, GET, GETRANGE, GETSET, MGET, MSET, MSETNX, SET, SETEX, PSETEX, SETNX, SETRANGE, STRLEN, STRALGO,
 
     // Numeric
 
@@ -45,7 +45,7 @@ public enum CommandType implements ProtocolKeyword {
 
     // List
 
-    BLPOP, BRPOP, BRPOPLPUSH, LINDEX, LINSERT, LLEN, LPOP, LPUSH, LPUSHX, LRANGE, LREM, LSET, LTRIM, RPOP, RPOPLPUSH, RPUSH, RPUSHX, SORT,
+    BLPOP, BRPOP, BRPOPLPUSH, LINDEX, LINSERT, LLEN, LPOP, LPOS, LPUSH, LPUSHX, LRANGE, LREM, LSET, LTRIM, RPOP, RPOPLPUSH, RPUSH, RPUSHX, SORT,
 
     // Hash
 
@@ -109,4 +109,5 @@ public enum CommandType implements ProtocolKeyword {
     public byte[] getBytes() {
         return bytes;
     }
+
 }

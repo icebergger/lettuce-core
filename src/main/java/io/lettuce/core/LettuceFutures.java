@@ -35,11 +35,12 @@ public class LettuceFutures {
 
     /**
      * Wait until futures are complete or the supplied timeout is reached. Commands are not canceled (in contrast to
-     * {@link #awaitOrCancel(RedisFuture, long, TimeUnit)}) when the timeout expires.
+     * {@link #awaitOrCancel(RedisFuture, long, TimeUnit)}) when the timeout expires. A {@code timeout} value of zero or less
+     * indicates to not time out.
      *
-     * @param timeout Maximum time to wait for futures to complete.
-     * @param futures Futures to wait for.
-     * @return {@literal true} if all futures complete in time, otherwise {@literal false}
+     * @param timeout maximum time to wait for futures to complete.
+     * @param futures futures to wait for.
+     * @return {@code true} if all futures complete in time, otherwise {@code false}.
      * @since 5.0
      */
     public static boolean awaitAll(Duration timeout, Future<?>... futures) {
@@ -48,12 +49,13 @@ public class LettuceFutures {
 
     /**
      * Wait until futures are complete or the supplied timeout is reached. Commands are not canceled (in contrast to
-     * {@link #awaitOrCancel(RedisFuture, long, TimeUnit)}) when the timeout expires.
+     * {@link #awaitOrCancel(RedisFuture, long, TimeUnit)}) when the timeout expires. A {@code timeout} value of zero or less
+     * indicates to not time out.
      *
-     * @param timeout Maximum time to wait for futures to complete.
-     * @param unit Unit of time for the timeout.
-     * @param futures Futures to wait for.
-     * @return {@literal true} if all futures complete in time, otherwise {@literal false}
+     * @param timeout maximum time to wait for futures to complete.
+     * @param unit unit of time for the timeout.
+     * @param futures futures to wait for.
+     * @return {@code true} if all futures complete in time, otherwise {@code false}.
      */
     public static boolean awaitAll(long timeout, TimeUnit unit, Future<?>... futures) {
 
@@ -63,15 +65,19 @@ public class LettuceFutures {
 
             for (Future<?> f : futures) {
 
-                if (nanos < 0) {
-                    return false;
+                if (timeout <= 0) {
+                    f.get();
+                } else {
+                    if (nanos < 0) {
+                        return false;
+                    }
+
+                    f.get(nanos, TimeUnit.NANOSECONDS);
+
+                    long now = System.nanoTime();
+                    nanos -= now - time;
+                    time = now;
                 }
-
-                f.get(nanos, TimeUnit.NANOSECONDS);
-
-                long now = System.nanoTime();
-                nanos -= now - time;
-                time = now;
             }
 
             return true;
@@ -97,19 +103,18 @@ public class LettuceFutures {
 
     /**
      * Wait until futures are complete or the supplied timeout is reached. Commands are canceled if the timeout is reached but
-     * the command is not finished.
+     * the command is not finished. A {@code timeout} value of zero or less indicates to not time out.
      *
-     * @param cmd Command to wait for
-     * @param timeout Maximum time to wait for futures to complete
-     * @param unit Unit of time for the timeout
-     * @param <T> Result type
-     *
+     * @param cmd command to wait for.
+     * @param timeout maximum time to wait for futures to complete.
+     * @param unit unit of time for the timeout.
+     * @param <T> Result type.
      * @return Result of the command.
      */
     public static <T> T awaitOrCancel(RedisFuture<T> cmd, long timeout, TimeUnit unit) {
 
         try {
-            if (!cmd.await(timeout, unit)) {
+            if (timeout > 0 && !cmd.await(timeout, unit)) {
                 cmd.cancel(true);
                 throw ExceptionFactory.createTimeoutException(Duration.ofNanos(unit.toNanos(timeout)));
             }

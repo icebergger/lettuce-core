@@ -16,7 +16,7 @@
 package io.lettuce.core.dynamic;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.Assert.fail;
+import static org.assertj.core.api.Assertions.fail;
 
 import java.util.function.Function;
 
@@ -71,17 +71,21 @@ class ConversionServiceUnitTests {
     }
 
     private class FluxToObservableConverter implements Function<Flux<?>, Observable<?>> {
+
         @Override
         public Observable<?> apply(Flux<?> source) {
             return null;
         }
+
     }
 
     private class MonoToObservableConverter implements Function<Mono<?>, Observable<?>> {
+
         @Override
         public Observable<?> apply(Mono<?> source) {
             return Observable.just("world");
         }
+
     }
 
 }

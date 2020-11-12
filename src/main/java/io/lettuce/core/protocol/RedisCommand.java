@@ -45,27 +45,28 @@ public interface RedisCommand<K, V, T> {
     void complete();
 
     /**
-     * Cancel a command.
+     * Complete this command by attaching the given {@link Throwable exception}.
+     *
+     * @param throwable the exception.
+     * @return {@code true} if this invocation caused this CompletableFuture to transition to a completed state, else
+     *         {@code false}.
+     */
+    boolean completeExceptionally(Throwable throwable);
+
+    /**
+     * Attempts to cancel execution of this command. This attempt will fail if the task has already completed, has already been
+     * cancelled, or could not be cancelled for some other reason.
      */
     void cancel();
 
     /**
-     *
-     * @return the current command args
+     * @return the current command args.
      */
     CommandArgs<K, V> getArgs();
 
     /**
      *
-     * @param throwable the exception
-     * @return {@code true} if this invocation caused this CompletableFuture to transition to a completed state, else
-     *         {@code false}
-     */
-    boolean completeExceptionally(Throwable throwable);
-
-    /**
-     *
-     * @return the Redis command type like {@literal SADD}, {@literal HMSET}, {@literal QUIT}.
+     * @return the Redis command type like {@code SADD}, {@code HMSET}, {@code QUIT}.
      */
     ProtocolKeyword getType();
 
@@ -77,22 +78,28 @@ public interface RedisCommand<K, V, T> {
     void encode(ByteBuf buf);
 
     /**
+     * Returns {@code true} if this task was cancelled before it completed normally.
      *
-     * @return true if the command is cancelled.
+     * @return {@code true} if the command was cancelled before it completed normally.
      */
     boolean isCancelled();
 
     /**
+     * Returns {@code true} if this task completed.
      *
-     * @return true if the command is completed.
+     * Completion may be due to normal termination, an exception, or cancellation. In all of these cases, this method will
+     * return {@code true}.
+     *
+     * @return {@code true} if this task completed.
      */
     boolean isDone();
 
     /**
      * Set a new output. Only possible as long as the command is not completed/cancelled.
      *
-     * @param output the new command output
+     * @param output the new command output.
      * @throws IllegalStateException if the command is cancelled/completed
      */
     void setOutput(CommandOutput<K, V, T> output);
+
 }

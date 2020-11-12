@@ -76,14 +76,15 @@ public class DefaultClientResources implements ClientResources {
     /**
      * Minimum number of I/O threads.
      */
-    public static final int MIN_IO_THREADS = 3;
+    public static final int MIN_IO_THREADS = 2;
 
     /**
      * Minimum number of computation threads.
      */
-    public static final int MIN_COMPUTATION_THREADS = 3;
+    public static final int MIN_COMPUTATION_THREADS = 2;
 
     public static final int DEFAULT_IO_THREADS;
+
     public static final int DEFAULT_COMPUTATION_THREADS;
 
     /**
@@ -98,10 +99,8 @@ public class DefaultClientResources implements ClientResources {
 
     static {
 
-        int threads = Math.max(
-                1,
-                SystemPropertyUtil.getInt("io.netty.eventLoopThreads",
-                        Math.max(MIN_IO_THREADS, Runtime.getRuntime().availableProcessors())));
+        int threads = Math.max(1, SystemPropertyUtil.getInt("io.netty.eventLoopThreads",
+                Math.max(MIN_IO_THREADS, Runtime.getRuntime().availableProcessors())));
 
         DEFAULT_IO_THREADS = threads;
         DEFAULT_COMPUTATION_THREADS = threads;
@@ -111,20 +110,35 @@ public class DefaultClientResources implements ClientResources {
     }
 
     private final boolean sharedEventLoopGroupProvider;
+
     private final EventLoopGroupProvider eventLoopGroupProvider;
+
     private final boolean sharedEventExecutor;
+
     private final EventExecutorGroup eventExecutorGroup;
+
     private final Timer timer;
+
     private final boolean sharedTimer;
+
     private final EventBus eventBus;
+
     private final CommandLatencyCollector commandLatencyCollector;
+
     private final boolean sharedCommandLatencyCollector;
+
     private final EventPublisherOptions commandLatencyPublisherOptions;
+
     private final MetricEventPublisher metricEventPublisher;
+
     private final DnsResolver dnsResolver;
+
     private final SocketAddressResolver socketAddressResolver;
+
     private final Supplier<Delay> reconnectDelay;
+
     private final NettyCustomizer nettyCustomizer;
+
     private final Tracing tracing;
 
     private volatile boolean shutdownCalled = false;
@@ -248,23 +262,39 @@ public class DefaultClientResources implements ClientResources {
     public static class Builder implements ClientResources.Builder {
 
         private boolean sharedEventLoopGroupProvider;
+
         private boolean sharedEventExecutor;
+
         private boolean sharedTimer;
+
         private boolean sharedCommandLatencyCollector;
 
         private int ioThreadPoolSize = DEFAULT_IO_THREADS;
+
         private int computationThreadPoolSize = DEFAULT_COMPUTATION_THREADS;
+
         private EventExecutorGroup eventExecutorGroup;
+
         private EventLoopGroupProvider eventLoopGroupProvider;
+
         private Timer timer;
+
         private EventBus eventBus;
+
         private CommandLatencyCollectorOptions commandLatencyCollectorOptions = DefaultCommandLatencyCollectorOptions.create();
+
         private CommandLatencyCollector commandLatencyCollector;
+
         private EventPublisherOptions commandLatencyPublisherOptions = DefaultEventPublisherOptions.create();
+
         private DnsResolver dnsResolver = DnsResolvers.UNRESOLVED;
+
         private SocketAddressResolver socketAddressResolver;
+
         private Supplier<Delay> reconnectDelay = DEFAULT_RECONNECT_DELAY;
+
         private NettyCustomizer nettyCustomizer = DEFAULT_NETTY_CUSTOMIZER;
+
         private Tracing tracing = Tracing.disabled();
 
         private Builder() {
@@ -292,7 +322,7 @@ public class DefaultClientResources implements ClientResources {
          * {@link EventLoopGroupProvider} instance will not be shut down when shutting down the client resources. You have to
          * take care of that. This is an advanced configuration that should only be used if you know what you are doing.
          *
-         * @param eventLoopGroupProvider the shared eventLoopGroupProvider, must not be {@literal null}.
+         * @param eventLoopGroupProvider the shared eventLoopGroupProvider, must not be {@code null}.
          * @return {@code this} {@link Builder}.
          */
         @Override
@@ -327,7 +357,7 @@ public class DefaultClientResources implements ClientResources {
          * {@link EventExecutorGroup} instance will not be shut down when shutting down the client resources. You have to take
          * care of that. This is an advanced configuration that should only be used if you know what you are doing.
          *
-         * @param eventExecutorGroup the shared eventExecutorGroup, must not be {@literal null}.
+         * @param eventExecutorGroup the shared eventExecutorGroup, must not be {@code null}.
          * @return {@code this} {@link Builder}.
          */
         @Override
@@ -346,7 +376,7 @@ public class DefaultClientResources implements ClientResources {
          * shutting down the client resources. You have to take care of that. This is an advanced configuration that should only
          * be used if you know what you are doing.
          *
-         * @param timer the shared {@link Timer}, must not be {@literal null}.
+         * @param timer the shared {@link Timer}, must not be {@code null}.
          * @return {@code this} {@link Builder}.
          * @since 4.3
          */
@@ -363,7 +393,7 @@ public class DefaultClientResources implements ClientResources {
         /**
          * Sets the {@link EventBus} that can that can be used across different instances of the RedisClient.
          *
-         * @param eventBus the event bus, must not be {@literal null}.
+         * @param eventBus the event bus, must not be {@code null}.
          * @return {@code this} {@link Builder}.
          */
         @Override
@@ -379,7 +409,7 @@ public class DefaultClientResources implements ClientResources {
          * Sets the {@link EventPublisherOptions} to publish command latency metrics using the {@link EventBus}.
          *
          * @param commandLatencyPublisherOptions the {@link EventPublisherOptions} to publish command latency metrics using the
-         *        {@link EventBus}, must not be {@literal null}.
+         *        {@link EventBus}, must not be {@code null}.
          * @return {@code this} {@link Builder}.
          */
         @Override
@@ -395,7 +425,7 @@ public class DefaultClientResources implements ClientResources {
          * Sets the {@link CommandLatencyCollectorOptions} that can that can be used across different instances of the
          * RedisClient. The options are only effective if no {@code commandLatencyCollector} is provided.
          *
-         * @param commandLatencyCollectorOptions the command latency collector options, must not be {@literal null}.
+         * @param commandLatencyCollectorOptions the command latency collector options, must not be {@code null}.
          * @return {@code this} {@link Builder}.
          */
         @Override
@@ -410,7 +440,7 @@ public class DefaultClientResources implements ClientResources {
         /**
          * Sets the {@link CommandLatencyCollector} that can that can be used across different instances of the RedisClient.
          *
-         * @param commandLatencyCollector the command latency collector, must not be {@literal null}.
+         * @param commandLatencyCollector the command latency collector, must not be {@code null}.
          * @return {@code this} {@link Builder}.
          */
         @Override
@@ -427,7 +457,7 @@ public class DefaultClientResources implements ClientResources {
          * Sets the {@link SocketAddressResolver} that is used to resolve {@link io.lettuce.core.RedisURI} to
          * {@link java.net.SocketAddress}. Defaults to {@link SocketAddressResolver} using the configured {@link DnsResolver}.
          *
-         * @param socketAddressResolver the socket address resolver, must not be {@literal null}.
+         * @param socketAddressResolver the socket address resolver, must not be {@code null}.
          * @return {@code this} {@link ClientResources.Builder}.
          * @since 5.1
          */
@@ -444,7 +474,7 @@ public class DefaultClientResources implements ClientResources {
          * Sets the {@link DnsResolver} that is used to resolve hostnames to {@link java.net.InetAddress}. Defaults to
          * {@link DnsResolvers#JVM_DEFAULT}
          *
-         * @param dnsResolver the DNS resolver, must not be {@literal null}.
+         * @param dnsResolver the DNS resolver, must not be {@code null}.
          * @return {@code this} {@link Builder}.
          * @since 4.3
          */
@@ -461,7 +491,7 @@ public class DefaultClientResources implements ClientResources {
          * Sets the stateless reconnect {@link Delay} to delay reconnect attempts. Defaults to binary exponential delay capped
          * at {@literal 30 SECONDS}. {@code reconnectDelay} must be a stateless {@link Delay}.
          *
-         * @param reconnectDelay the reconnect delay, must not be {@literal null}.
+         * @param reconnectDelay the reconnect delay, must not be {@code null}.
          * @return this
          * @since 4.3
          */
@@ -478,7 +508,7 @@ public class DefaultClientResources implements ClientResources {
          * Sets the stateful reconnect {@link Supplier} to delay reconnect attempts. Defaults to binary exponential delay capped
          * at {@literal 30 SECONDS}.
          *
-         * @param reconnectDelay the reconnect delay, must not be {@literal null}.
+         * @param reconnectDelay the reconnect delay, must not be {@code null}.
          * @return this
          * @since 4.3
          */
@@ -494,7 +524,7 @@ public class DefaultClientResources implements ClientResources {
         /**
          * Sets the {@link NettyCustomizer} instance to customize netty components during connection.
          *
-         * @param nettyCustomizer the netty customizer instance, must not be {@literal null}.
+         * @param nettyCustomizer the netty customizer instance, must not be {@code null}.
          * @return this
          * @since 4.4
          */
@@ -510,7 +540,7 @@ public class DefaultClientResources implements ClientResources {
         /**
          * Sets the {@link Tracing} instance to trace Redis calls.
          *
-         * @param tracing the tracer infrastructure instance, must not be {@literal null}.
+         * @param tracing the tracer infrastructure instance, must not be {@code null}.
          * @return this
          * @since 5.1
          */
@@ -531,6 +561,7 @@ public class DefaultClientResources implements ClientResources {
         public DefaultClientResources build() {
             return new DefaultClientResources(this);
         }
+
     }
 
     /**
@@ -545,7 +576,6 @@ public class DefaultClientResources implements ClientResources {
      *
      * @return a {@link DefaultClientResources.Builder} to create new {@link DefaultClientResources} whose settings are
      *         replicated from the current {@link DefaultClientResources}.
-     *
      * @since 5.1
      */
     @Override
@@ -589,10 +619,10 @@ public class DefaultClientResources implements ClientResources {
     /**
      * Shutdown the {@link ClientResources}.
      *
-     * @param quietPeriod the quiet period as described in the documentation
+     * @param quietPeriod the quiet period as described in the documentation.
      * @param timeout the maximum amount of time to wait until the executor is shutdown regardless if a task was submitted
-     *        during the quiet period
-     * @param timeUnit the unit of {@code quietPeriod} and {@code timeout}
+     *        during the quiet period.
+     * @param timeUnit the unit of {@code quietPeriod} and {@code timeout}.
      * @return eventually the success/failure of the shutdown without errors.
      */
     @SuppressWarnings("unchecked")
@@ -601,22 +631,8 @@ public class DefaultClientResources implements ClientResources {
         logger.debug("Initiate shutdown ({}, {}, {})", quietPeriod, timeout, timeUnit);
 
         shutdownCalled = true;
-        DefaultPromise<Boolean> overall = new DefaultPromise<Boolean>(GlobalEventExecutor.INSTANCE);
-        DefaultPromise<Boolean> lastRelease = new DefaultPromise<Boolean>(GlobalEventExecutor.INSTANCE);
-        Futures.PromiseAggregator<Boolean, Promise<Boolean>> aggregator = new Futures.PromiseAggregator<Boolean, Promise<Boolean>>(
-                overall);
-
-        aggregator.expectMore(1);
-
-        if (!sharedEventLoopGroupProvider) {
-            aggregator.expectMore(1);
-        }
-
-        if (!sharedEventExecutor) {
-            aggregator.expectMore(1);
-        }
-
-        aggregator.arm();
+        DefaultPromise<Void> voidPromise = new DefaultPromise<>(ImmediateEventExecutor.INSTANCE);
+        PromiseCombiner aggregator = new PromiseCombiner(ImmediateEventExecutor.INSTANCE);
 
         if (metricEventPublisher != null) {
             metricEventPublisher.shutdown();
@@ -628,26 +644,21 @@ public class DefaultClientResources implements ClientResources {
 
         if (!sharedEventLoopGroupProvider) {
             Future<Boolean> shutdown = eventLoopGroupProvider.shutdown(quietPeriod, timeout, timeUnit);
-            if (shutdown instanceof Promise) {
-                aggregator.add((Promise<Boolean>) shutdown);
-            } else {
-                aggregator.add(toBooleanPromise(shutdown));
-            }
+            aggregator.add(shutdown);
         }
 
         if (!sharedEventExecutor) {
             Future<?> shutdown = eventExecutorGroup.shutdownGracefully(quietPeriod, timeout, timeUnit);
-            aggregator.add(toBooleanPromise(shutdown));
+            aggregator.add(shutdown);
         }
 
         if (!sharedCommandLatencyCollector) {
             commandLatencyCollector.shutdown();
         }
 
-        aggregator.add(lastRelease);
-        lastRelease.setSuccess(null);
+        aggregator.finish(voidPromise);
 
-        return toBooleanPromise(overall);
+        return toBooleanPromise(voidPromise);
     }
 
     @Override
@@ -714,4 +725,5 @@ public class DefaultClientResources implements ClientResources {
     public Tracing tracing() {
         return tracing;
     }
+
 }

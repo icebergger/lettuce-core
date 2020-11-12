@@ -41,21 +41,59 @@ import io.netty.util.internal.logging.InternalLoggerFactory;
 public class RedisStateMachine {
 
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(RedisStateMachine.class);
+
     private static final ByteBuffer QUEUED = buffer("QUEUED");
 
     static class State {
-        enum Type {
-            SINGLE, ERROR, INTEGER, BULK, MULTI, BYTES
+
+        /**
+         * Callback interface to handle a {@link State}.
+         */
+        @FunctionalInterface
+        interface StateHandler {
+
+            Result handle(RedisStateMachine rsm, State state, ByteBuf buffer, RedisCommand<?, ?, ?> command,
+                    CommandOutput<?, ?, ?> output);
+        }
+
+        enum Type implements StateHandler {
+
+            SINGLE(RedisStateMachine::handleSingle), //
+            ERROR(RedisStateMachine::handleError), //
+            INTEGER(RedisStateMachine::handleInteger), //
+            BULK(RedisStateMachine::handleBulk), //
+            MULTI(RedisStateMachine::handleMulti), //
+            BYTES(RedisStateMachine::handleBytes);
+
+            private final StateHandler behavior;
+
+            Type(StateHandler behavior) {
+                this.behavior = behavior;
+            }
+
+            public Result handle(RedisStateMachine rsm, State state, ByteBuf buffer, RedisCommand<?, ?, ?> command,
+                    CommandOutput<?, ?, ?> output) {
+                return behavior.handle(rsm, state, buffer, command, output);
+            }
+        }
+
+        enum Result {
+            NORMAL_END, BREAK_LOOP, CONTINUE_LOOP
         }
 
         Type type = null;
+
         int count = -1;
     }
 
     private final State[] stack = new State[32];
+
     private final boolean debugEnabled = logger.isDebugEnabled();
+
     private final LongProcessor longProcessor = new LongProcessor();
-    private final ByteBuf responseElementBuffer = PooledByteBufAllocator.DEFAULT.directBuffer(1024);
+
+    private final ByteBuf responseElementBuffer = PooledByteBufAllocator.DEFAULT.buffer(1024);
+
     private final AtomicBoolean closed = new AtomicBoolean();
 
     private int stackElements;
@@ -71,7 +109,7 @@ public class RedisStateMachine {
      *
      * @param buffer Buffer containing data from the server.
      * @param output Current command output.
-     * @return true if a complete response was read.
+     * @return {@code true} if a complete response was read.
      */
     public boolean decode(ByteBuf buffer, CommandOutput<?, ?, ?> output) {
         return decode(buffer, null, output);
@@ -81,15 +119,14 @@ public class RedisStateMachine {
      * Attempt to decode a redis response and return a flag indicating whether a complete response was read.
      *
      * @param buffer Buffer containing data from the server.
-     * @param command the command itself
+     * @param command the command itself.
      * @param output Current command output.
-     * @return true if a complete response was read.
+     * @return {@code true} if a complete response was read.
      */
     public boolean decode(ByteBuf buffer, RedisCommand<?, ?, ?> command, CommandOutput<?, ?, ?> output) {
-        int length, end;
-        ByteBuffer bytes;
 
         buffer.touch("RedisStateMachine.decode(…)");
+
         if (debugEnabled) {
             logger.debug("Decode {}", command);
         }
@@ -102,7 +139,18 @@ public class RedisStateMachine {
             return isEmpty(stack);
         }
 
-        loop:
+        doDecode(buffer, command, output);
+
+        if (debugEnabled) {
+            logger.debug("Decoded {}, empty stack: {}", command, isEmpty(stack));
+        }
+
+        return isEmpty(stack);
+    }
+
+    private void doDecode(ByteBuf buffer, RedisCommand<?, ?, ?> command, CommandOutput<?, ?, ?> output) {
+
+        State.Result result;
 
         while (!isEmpty(stack)) {
             State state = peek(stack);
@@ -115,70 +163,11 @@ public class RedisStateMachine {
                 buffer.markReaderIndex();
             }
 
-            switch (state.type) {
-                case SINGLE:
-                    if ((bytes = readLine(buffer)) == null) {
-                        break loop;
-                    }
-
-                    if (!QUEUED.equals(bytes)) {
-                        safeSetSingle(output, bytes, command);
-                    }
-                    break;
-                case ERROR:
-                    if ((bytes = readLine(buffer)) == null) {
-                        break loop;
-                    }
-                    safeSetError(output, bytes, command);
-                    break;
-                case INTEGER:
-                    if ((end = findLineEnd(buffer)) == -1) {
-                        break loop;
-                    }
-                    long integer = readLong(buffer, buffer.readerIndex(), end);
-                    safeSet(output, integer, command);
-                    break;
-                case BULK:
-                    if ((end = findLineEnd(buffer)) == -1) {
-                        break loop;
-                    }
-                    length = (int) readLong(buffer, buffer.readerIndex(), end);
-                    if (length == -1) {
-                        safeSet(output, null, command);
-                    } else {
-                        state.type = BYTES;
-                        state.count = length + 2;
-                        buffer.markReaderIndex();
-                        continue loop;
-                    }
-                    break;
-                case MULTI:
-                    if (state.count == -1) {
-                        if ((end = findLineEnd(buffer)) == -1) {
-                            break loop;
-                        }
-                        length = (int) readLong(buffer, buffer.readerIndex(), end);
-                        state.count = length;
-                        buffer.markReaderIndex();
-                        safeMulti(output, state.count, command);
-                    }
-
-                    if (state.count <= 0) {
-                        break;
-                    }
-
-                    state.count--;
-                    addFirst(stack, new State());
-
-                    continue loop;
-                case BYTES:
-                    if ((bytes = readBytes(buffer, state.count)) == null) {
-                        break loop;
-                    }
-                    safeSet(output, bytes, command);
-                    break;
-                default:
-                    throw new IllegalStateException("State " + state.type + " not supported");
+            result = state.type.handle(this, state, buffer, command, output);
+            if (State.Result.BREAK_LOOP.equals(result)) {
+                break;
+            } else if (State.Result.CONTINUE_LOOP.equals(result)) {
+                continue;
             }
 
             buffer.markReaderIndex();
@@ -186,12 +175,104 @@ public class RedisStateMachine {
 
             output.complete(size(stack));
         }
+    }
 
-        if (debugEnabled) {
-            logger.debug("Decoded {}, empty stack: {}", command, isEmpty(stack));
+    private static State.Result handleSingle(RedisStateMachine rsm, State state, ByteBuf buffer, RedisCommand<?, ?, ?> command,
+            CommandOutput<?, ?, ?> output) {
+
+        ByteBuffer bytes;
+        if ((bytes = rsm.readLine(buffer)) == null) {
+            return State.Result.BREAK_LOOP;
         }
 
-        return isEmpty(stack);
+        if (!QUEUED.equals(bytes)) {
+            rsm.safeSetSingle(output, bytes, command);
+        }
+        return State.Result.NORMAL_END;
+    }
+
+    private static State.Result handleError(RedisStateMachine rsm, State state, ByteBuf buffer, RedisCommand<?, ?, ?> command,
+            CommandOutput<?, ?, ?> output) {
+
+        ByteBuffer bytes;
+        if ((bytes = rsm.readLine(buffer)) == null) {
+            return State.Result.BREAK_LOOP;
+        }
+
+        rsm.safeSetError(output, bytes, command);
+        return State.Result.NORMAL_END;
+    }
+
+    private static State.Result handleInteger(RedisStateMachine rsm, State state, ByteBuf buffer, RedisCommand<?, ?, ?> command,
+            CommandOutput<?, ?, ?> output) {
+
+        int end;
+        if ((end = rsm.findLineEnd(buffer)) == -1) {
+            return State.Result.BREAK_LOOP;
+        }
+
+        long integer = rsm.readLong(buffer, buffer.readerIndex(), end);
+        rsm.safeSet(output, integer, command);
+        return State.Result.NORMAL_END;
+    }
+
+    private static State.Result handleBulk(RedisStateMachine rsm, State state, ByteBuf buffer, RedisCommand<?, ?, ?> command,
+            CommandOutput<?, ?, ?> output) {
+
+        int length;
+        int end;
+        if ((end = rsm.findLineEnd(buffer)) == -1) {
+            return State.Result.BREAK_LOOP;
+        }
+
+        length = (int) rsm.readLong(buffer, buffer.readerIndex(), end);
+        if (length == -1) {
+            rsm.safeSet(output, null, command);
+        } else {
+            state.type = BYTES;
+            state.count = length + 2;
+            buffer.markReaderIndex();
+            return State.Result.CONTINUE_LOOP;
+        }
+
+        return State.Result.NORMAL_END;
+    }
+
+    private static State.Result handleMulti(RedisStateMachine rsm, State state, ByteBuf buffer, RedisCommand<?, ?, ?> command,
+            CommandOutput<?, ?, ?> output) {
+
+        int length;
+        int end;
+        if (state.count == -1) {
+            if ((end = rsm.findLineEnd(buffer)) == -1) {
+                return State.Result.BREAK_LOOP;
+            }
+            length = (int) rsm.readLong(buffer, buffer.readerIndex(), end);
+            state.count = length;
+            buffer.markReaderIndex();
+            rsm.safeMulti(output, state.count, command);
+        }
+
+        if (state.count <= 0) {
+            return State.Result.NORMAL_END;
+        }
+
+        state.count--;
+        rsm.addFirst(rsm.stack, new State());
+
+        return State.Result.CONTINUE_LOOP;
+    }
+
+    private static State.Result handleBytes(RedisStateMachine rsm, State state, ByteBuf buffer, RedisCommand<?, ?, ?> command,
+            CommandOutput<?, ?, ?> output) {
+
+        ByteBuffer bytes;
+        if ((bytes = rsm.readBytes(buffer, state.count)) == null) {
+            return State.Result.BREAK_LOOP;
+        }
+
+        rsm.safeSet(output, bytes, command);
+        return State.Result.NORMAL_END;
     }
 
     /**
@@ -231,7 +312,7 @@ public class RedisStateMachine {
             case '*':
                 return MULTI;
             default:
-                throw new RedisException("Invalid first byte: " + Byte.toString(b));
+                throw new RedisException("Invalid first byte: " + b);
         }
     }
 
@@ -330,6 +411,7 @@ public class RedisStateMachine {
     }
 
     /**
+     *
      * @param stack
      * @return number of stack elements.
      */
@@ -338,8 +420,9 @@ public class RedisStateMachine {
     }
 
     /**
+     *
      * @param stack
-     * @return true if the stack is empty.
+     * @return {@code true} if the stack is empty.
      */
     private boolean isEmpty(State[] stack) {
         return stackElements == 0;
@@ -429,7 +512,9 @@ public class RedisStateMachine {
     static class LongProcessor implements ByteProcessor {
 
         long result;
+
         boolean negative;
+
         boolean first;
 
         public long getValue(ByteBuf buffer, int start, int end) {
@@ -448,7 +533,7 @@ public class RedisStateMachine {
         }
 
         @Override
-        public boolean process(byte value) throws Exception {
+        public boolean process(byte value) {
 
             if (first) {
                 first = false;
@@ -468,5 +553,7 @@ public class RedisStateMachine {
 
             return true;
         }
+
     }
+
 }

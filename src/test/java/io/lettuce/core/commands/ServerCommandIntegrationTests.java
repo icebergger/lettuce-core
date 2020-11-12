@@ -17,8 +17,6 @@ package io.lettuce.core.commands;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.junit.Assert.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -51,6 +49,8 @@ import io.lettuce.test.condition.RedisConditions;
 import io.lettuce.test.settings.TestSettings;
 
 /**
+ * Integration tests for {@link io.lettuce.core.api.sync.RedisServerCommands}.
+ *
  * @author Will Glozer
  * @author Mark Paluch
  * @author Zhang Jessey
@@ -60,6 +60,7 @@ import io.lettuce.test.settings.TestSettings;
 public class ServerCommandIntegrationTests extends TestSupport {
 
     private final RedisClient client;
+
     private final RedisCommands<String, String> redis;
 
     @Inject
@@ -76,7 +77,7 @@ public class ServerCommandIntegrationTests extends TestSupport {
     @Test
     void bgrewriteaof() {
         String msg = "Background append only file rewriting";
-        assertThat(redis.bgrewriteaof(), containsString(msg));
+        assertThat(redis.bgrewriteaof()).contains(msg);
     }
 
     @Test
@@ -168,6 +169,11 @@ public class ServerCommandIntegrationTests extends TestSupport {
     }
 
     @Test
+    void clientId() {
+        assertThat(redis.clientId()).isNotNull();
+    }
+
+    @Test
     void commandCount() {
         assertThat(redis.commandCount()).isGreaterThan(100);
     }
@@ -177,25 +183,25 @@ public class ServerCommandIntegrationTests extends TestSupport {
 
         List<Object> result = redis.command();
 
-        assertThat(result.size()).isGreaterThan(100);
+        assertThat(result).hasSizeGreaterThan(100);
 
         List<CommandDetail> commands = CommandDetailParser.parse(result);
         assertThat(commands).hasSameSizeAs(result);
     }
 
     @Test
-    void commandInfo() {
+    public void commandInfo() {
 
         List<Object> result = redis.commandInfo(CommandType.GETRANGE, CommandType.SET);
 
-        assertThat(result.size()).isEqualTo(2);
+        assertThat(result).hasSize(2);
 
         List<CommandDetail> commands = CommandDetailParser.parse(result);
         assertThat(commands).hasSameSizeAs(result);
 
         result = redis.commandInfo("a missing command");
 
-        assertThat(result.size()).isEqualTo(0);
+        assertThat(result).hasSize(1).containsNull();
     }
 
     @Test
@@ -208,7 +214,7 @@ public class ServerCommandIntegrationTests extends TestSupport {
         redis.get(key);
         redis.get(key);
         assertThat(redis.configResetstat()).isEqualTo("OK");
-        assertThat(redis.info().contains("keyspace_misses:0")).isTrue();
+        assertThat(redis.info()).contains("keyspace_misses:0");
     }
 
     @Test
@@ -318,8 +324,8 @@ public class ServerCommandIntegrationTests extends TestSupport {
 
     @Test
     void info() {
-        assertThat(redis.info().contains("redis_version")).isTrue();
-        assertThat(redis.info("server").contains("redis_version")).isTrue();
+        assertThat(redis.info()).contains("redis_version");
+        assertThat(redis.info("server")).contains("redis_version");
     }
 
     @Test
@@ -426,4 +432,5 @@ public class ServerCommandIntegrationTests extends TestSupport {
 
         return !info.contains("aof_rewrite_in_progress:1") && !info.contains("rdb_bgsave_in_progress:1");
     }
+
 }

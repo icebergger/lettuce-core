@@ -41,26 +41,30 @@ import io.lettuce.core.cluster.api.sync.RedisAdvancedClusterCommands;
 import io.lettuce.core.cluster.api.sync.RedisClusterCommands;
 import io.lettuce.core.cluster.models.partitions.Partitions;
 import io.lettuce.core.cluster.models.partitions.RedisClusterNode;
-import io.lettuce.test.Futures;
-import io.lettuce.test.KeysAndValues;
-import io.lettuce.test.LettuceExtension;
-import io.lettuce.test.ListStreamingAdapter;
+import io.lettuce.test.*;
 import io.lettuce.test.condition.EnabledOnCommand;
 import io.lettuce.test.settings.TestSettings;
 
 /**
+ * Integration tests for {@link StatefulRedisClusterConnection}.
+ *
  * @author Mark Paluch
+ * @author Jon Chambers
  */
 @SuppressWarnings("rawtypes")
 @ExtendWith(LettuceExtension.class)
 class AdvancedClusterClientIntegrationTests extends TestSupport {
 
     private static final String KEY_ON_NODE_1 = "a";
+
     private static final String KEY_ON_NODE_2 = "b";
 
     private final RedisClusterClient clusterClient;
+
     private final StatefulRedisClusterConnection<String, String> clusterConnection;
+
     private final RedisAdvancedClusterAsyncCommands<String, String> async;
+
     private final RedisAdvancedClusterCommands<String, String> sync;
 
     @Inject
@@ -123,8 +127,8 @@ class AdvancedClusterClientIntegrationTests extends TestSupport {
         for (RedisClusterNode redisClusterNode : clusterClient.getPartitions()) {
 
             StatefulRedisConnection<String, String> nodeId = statefulConnection.getConnection(redisClusterNode.getNodeId());
-            StatefulRedisConnection<String, String> hostAndPort = statefulConnection.getConnection(redisClusterNode.getUri()
-                    .getHost(), redisClusterNode.getUri().getPort());
+            StatefulRedisConnection<String, String> hostAndPort = statefulConnection
+                    .getConnection(redisClusterNode.getUri().getHost(), redisClusterNode.getUri().getPort());
 
             assertThat(nodeId).isNotSameAs(hostAndPort);
         }
@@ -312,10 +316,10 @@ class AdvancedClusterClientIntegrationTests extends TestSupport {
 
         writeKeysToTwoNodes();
 
-        RedisClusterCommands<String, String> nodeConnection1 = clusterConnection.getConnection(ClusterTestSettings.host,
-                ClusterTestSettings.port1).sync();
-        RedisClusterCommands<String, String> nodeConnection2 = clusterConnection.getConnection(ClusterTestSettings.host,
-                ClusterTestSettings.port1).sync();
+        RedisClusterCommands<String, String> nodeConnection1 = clusterConnection
+                .getConnection(ClusterTestSettings.host, ClusterTestSettings.port1).sync();
+        RedisClusterCommands<String, String> nodeConnection2 = clusterConnection
+                .getConnection(ClusterTestSettings.host, ClusterTestSettings.port1).sync();
 
         assertThat(nodeConnection1.dbsize()).isEqualTo(1);
         assertThat(nodeConnection2.dbsize()).isEqualTo(1);
@@ -333,6 +337,20 @@ class AdvancedClusterClientIntegrationTests extends TestSupport {
 
         Long dbsize = sync.dbsize();
         assertThat(dbsize).isEqualTo(0);
+    }
+
+    @Test
+    void flushallAsync() {
+
+        writeKeysToTwoNodes();
+
+        assertThat(sync.flushallAsync()).isEqualTo("OK");
+
+        Wait.untilTrue(() -> sync.get(KEY_ON_NODE_1) == null).waitOrTimeout();
+        Wait.untilTrue(() -> sync.get(KEY_ON_NODE_2) == null).waitOrTimeout();
+
+        assertThat(sync.get(KEY_ON_NODE_1)).isNull();
+        assertThat(sync.get(KEY_ON_NODE_2)).isNull();
     }
 
     @Test
@@ -379,7 +397,7 @@ class AdvancedClusterClientIntegrationTests extends TestSupport {
 
     @Test
     void scriptKill() {
-        assertThat(sync.scriptKill()).isEqualTo("OK");
+        assertThatThrownBy(sync::scriptKill).hasMessageContaining("NOTBUSY");
     }
 
     @Test
@@ -602,8 +620,8 @@ class AdvancedClusterClientIntegrationTests extends TestSupport {
             }
         } while (!scanCursor.isFinished());
 
-        assertThat(adapter.getList()).containsAll(
-                KeysAndValues.KEYS.stream().filter(k -> k.startsWith("a")).collect(Collectors.toList()));
+        assertThat(adapter.getList())
+                .containsAll(KeysAndValues.KEYS.stream().filter(k -> k.startsWith("a")).collect(Collectors.toList()));
 
     }
 

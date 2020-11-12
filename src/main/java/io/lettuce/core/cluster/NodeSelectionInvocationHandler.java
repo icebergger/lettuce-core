@@ -26,8 +26,8 @@ import java.util.stream.Collectors;
 import org.reactivestreams.Publisher;
 
 import io.lettuce.core.ExceptionFactory;
+import io.lettuce.core.LettuceFutures;
 import io.lettuce.core.RedisCommandExecutionException;
-import io.lettuce.core.RedisCommandInterruptedException;
 import io.lettuce.core.RedisCommandTimeoutException;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.cluster.api.NodeSelectionSupport;
@@ -48,11 +48,15 @@ class NodeSelectionInvocationHandler extends AbstractInvocationHandler {
     private static final Method NULL_MARKER_METHOD;
 
     private final Map<Method, Method> nodeSelectionMethods = new ConcurrentHashMap<>();
+
     private final Map<Method, Method> connectionMethod = new ConcurrentHashMap<>();
+
     private final Class<?> commandsInterface;
 
     private final AbstractNodeSelection<?, ?, ?, ?> selection;
+
     private final ExecutionModel executionModel;
+
     private final TimeoutProvider timeoutProvider;
 
     static {
@@ -123,8 +127,8 @@ class NodeSelectionInvocationHandler extends AbstractInvocationHandler {
 
                     try {
 
-                        Object resultValue = targetMethod.invoke(
-                                executionModel == ExecutionModel.REACTIVE ? it.reactive() : it.async(), args);
+                        Object resultValue = targetMethod
+                                .invoke(executionModel == ExecutionModel.REACTIVE ? it.reactive() : it.async(), args);
 
                         if (timeoutProvider != null && resultValue instanceof RedisCommand && timeout.get() == 0) {
                             timeout.set(timeoutProvider.getTimeoutNs((RedisCommand) resultValue));
@@ -158,8 +162,8 @@ class NodeSelectionInvocationHandler extends AbstractInvocationHandler {
     }
 
     @SuppressWarnings("unchecked")
-    private Object getExecutions(Map<RedisClusterNode, Object> executions, long timeoutNs) throws ExecutionException,
-            InterruptedException {
+    private Object getExecutions(Map<RedisClusterNode, Object> executions, long timeoutNs)
+            throws ExecutionException, InterruptedException {
 
         if (executionModel == ExecutionModel.REACTIVE) {
             Map<RedisClusterNode, CompletionStage<? extends Publisher<?>>> reactiveExecutions = (Map) executions;
@@ -170,7 +174,7 @@ class NodeSelectionInvocationHandler extends AbstractInvocationHandler {
 
         if (executionModel == ExecutionModel.SYNC) {
 
-            long timeoutToUse = timeoutNs > 0 ? timeoutNs : timeoutProvider.getTimeoutNs(null);
+            long timeoutToUse = timeoutNs >= 0 ? timeoutNs : timeoutProvider.getTimeoutNs(null);
 
             if (!awaitAll(timeoutToUse, TimeUnit.NANOSECONDS, asyncExecutions.values())) {
                 throw createTimeoutException(asyncExecutions, Duration.ofNanos(timeoutToUse));
@@ -186,36 +190,17 @@ class NodeSelectionInvocationHandler extends AbstractInvocationHandler {
         return new AsyncExecutionsImpl<>(asyncExecutions);
     }
 
-    private static boolean awaitAll(long timeout, TimeUnit unit, Collection<CompletionStage<?>> futures) {
+    @SuppressWarnings("rawtypes")
+    private static boolean awaitAll(long timeout, TimeUnit unit, Collection<CompletionStage<?>> stages) {
 
-        boolean complete;
+        CompletableFuture[] futures = new CompletableFuture[stages.size()];
 
-        try {
-            long nanos = unit.toNanos(timeout);
-            long time = System.nanoTime();
-
-            for (CompletionStage<?> f : futures) {
-                if (nanos < 0) {
-                    return false;
-                }
-                try {
-                    f.toCompletableFuture().get(nanos, TimeUnit.NANOSECONDS);
-                } catch (ExecutionException e) {
-                    // ignore
-                }
-                long now = System.nanoTime();
-                nanos -= now - time;
-                time = now;
-            }
-
-            complete = true;
-        } catch (TimeoutException e) {
-            complete = false;
-        } catch (Exception e) {
-            throw new RedisCommandInterruptedException(e);
+        int i = 0;
+        for (CompletionStage<?> completableFuture : stages) {
+            futures[i++] = completableFuture.toCompletableFuture();
         }
 
-        return complete;
+        return LettuceFutures.awaitAll(timeout, unit, futures);
     }
 
     private boolean atLeastOneFailed(Map<RedisClusterNode, CompletionStage<?>> executions) {
@@ -309,4 +294,5 @@ class NodeSelectionInvocationHandler extends AbstractInvocationHandler {
     enum ExecutionModel {
         SYNC, ASYNC, REACTIVE
     }
+
 }

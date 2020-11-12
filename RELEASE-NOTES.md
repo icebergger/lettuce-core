@@ -1,35 +1,32 @@
-Lettuce 5.2.1 RELEASE NOTES
+Lettuce 5.3.5 RELEASE NOTES
 ===========================
 
-The Lettuce team is pleased to announce the Lettuce 5.2.1 release! 
-This release ships with mostly bug fixes and dependency upgrades addressing 9 tickets in total.
+The Lettuce team is pleased to announce the Lettuce 5.3.5 service release! 
+This release ships with 5 tickets fixed along with dependency upgrades. 
  
 Find the full changelog at the end of this document.
 
-Thanks to all contributors who made Lettuce 5.2.1.RELEASE possible.
-Lettuce requires a minimum of Java 8 to build and run and is compatible with Java 13. It is tested continuously against the latest Redis source-build.
+Thanks to all contributors who made Lettuce 5.3.5.RELEASE possible.
+Lettuce 6 supports Redis 2.6+ up to Redis 6.x. In terms of Java runtime, Lettuce requires at least Java 8 and works with Java 15. It is tested continuously against the latest Redis source-build.
 
 If you need any support, meet Lettuce at
 
-* Google Group (General discussion, announcements, and releases): https://groups.google.com/d/forum/lettuce-redis-client-users
+* Google Group (General discussion, announcements, and releases): https://groups.google.com/g/lettuce-redis-client-users
 or lettuce-redis-client-users@googlegroups.com
 * Stack Overflow (Questions): https://stackoverflow.com/questions/tagged/lettuce
 * Join the chat at https://gitter.im/lettuce-io/Lobby for general discussion
 * GitHub Issues (Bug reports, feature requests): https://github.com/lettuce-io/lettuce-core/issues
-* Documentation: https://lettuce.io/core/5.2.1.RELEASE/reference/
-* Javadoc: https://lettuce.io/core/5.2.1.RELEASE/api/
+* Documentation: https://lettuce.io/core/5.3.5.RELEASE/reference/
+* Javadoc: https://lettuce.io/core/5.3.5.RELEASE/api/
 
 Fixes
 -----
-* StackOverflowError in RedisPublisher #1140 (Thanks to @csunwold)
-* Incorrect access on io.lettuce.core.ReadFrom.isOrderSensitive() #1145 (Thanks to @orclev)
-* Consider ReadFrom.isOrderSensitive() in cluster scan command #1146
-* Improve log message for nodes that cannot be reached during reconnect/topology refresh #1152 (Thanks to @drewcsillag)
+* Lettuce with Tracing enabled fails to connect to a Redis Sentinel #1470 (Thanks to @jsonwan)
+* Lettuce doesn't handle deleted stream items (NullPointerException) #1474 (Thanks to @chemist777)
 
 Other
 -----
-* Simplify condition to invoke "resolveCodec" method in AnnotationRedisCodecResolver #1149 (Thanks to @machi1990)
-* Upgrade to netty 4.1.43.Final #1161
-* Upgrade to RxJava 2.2.13 #1162
-* Add ByteBuf.touch(…) to aid buffer leak investigation #1164
-* Add warning log if MasterReplica(…, Iterable<RedisURI>) contains multiple Sentinel URIs #1165
+* Correctly report isDone if Command completed with completeExceptionally #1433
+* Upgrade dependencies #1476
+* Remove JUnit 4 dependency management #1477
+

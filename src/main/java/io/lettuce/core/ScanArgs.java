@@ -18,10 +18,9 @@ package io.lettuce.core;
 import static io.lettuce.core.protocol.CommandKeyword.COUNT;
 import static io.lettuce.core.protocol.CommandKeyword.MATCH;
 
-import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 
-import io.lettuce.core.codec.StringCodec;
 import io.lettuce.core.internal.LettuceAssert;
 import io.lettuce.core.protocol.CommandArgs;
 
@@ -33,12 +32,16 @@ import io.lettuce.core.protocol.CommandArgs;
  * {@link ScanArgs} is a mutable object and instances should be used only once to avoid shared mutable state.
  *
  * @author Mark Paluch
+ * @author Ge Jun
  * @since 3.0
  */
 public class ScanArgs implements CompositeArgument {
 
     private Long count;
+
     private String match;
+
+    private Charset charset;
 
     /**
      * Builder entry points for {@link ScanArgs}.
@@ -72,26 +75,41 @@ public class ScanArgs implements CompositeArgument {
         public static ScanArgs matches(String matches) {
             return new ScanArgs().match(matches);
         }
+
     }
 
     /**
-     * Set the match filter.
+     * Set the match filter. Uses {@link StandardCharsets#UTF_8 UTF-8} to encode {@code match}.
      *
-     * @param match the filter, must not be {@literal null}.
+     * @param match the filter, must not be {@code null}.
      * @return {@literal this} {@link ScanArgs}.
      */
     public ScanArgs match(String match) {
+        return match(match, StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Set the match filter along the given {@link Charset}.
+     *
+     * @param match the filter, must not be {@code null}.
+     * @param charset the charset for match, must not be {@code null}.
+     * @return {@literal this} {@link ScanArgs}.
+     * @since 5.3.1
+     */
+    public ScanArgs match(String match, Charset charset) {
 
         LettuceAssert.notNull(match, "Match must not be null");
+        LettuceAssert.notNull(charset, "Charset must not be null");
 
         this.match = match;
+        this.charset = charset;
         return this;
     }
 
     /**
-     * Limit the scan by count
+     * Limit the scan by count.
      *
-     * @param count number of elements to scan
+     * @param count number of elements to scan.
      * @return {@literal this} {@link ScanArgs}.
      */
     public ScanArgs limit(long count) {
@@ -103,11 +121,12 @@ public class ScanArgs implements CompositeArgument {
     public <K, V> void build(CommandArgs<K, V> args) {
 
         if (match != null) {
-            args.add(MATCH).add(match.getBytes(StandardCharsets.UTF_8));
+            args.add(MATCH).add(match.getBytes(charset));
         }
 
         if (count != null) {
             args.add(COUNT).add(count);
         }
     }
+
 }

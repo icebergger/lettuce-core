@@ -44,6 +44,7 @@ import io.lettuce.test.resource.FastShutdown;
 class ClientIntegrationTests extends TestSupport {
 
     private final RedisClient client;
+
     private final RedisCommands<String, String> redis;
 
     @Inject
@@ -83,9 +84,8 @@ class ClientIntegrationTests extends TestSupport {
     @Test
     void timeout() {
 
-        redis.setTimeout(0, TimeUnit.MICROSECONDS);
-        assertThatThrownBy(() -> redis.eval(" os.execute(\"sleep \" .. tonumber(1))", ScriptOutputType.STATUS)).isInstanceOf(
-                RedisCommandTimeoutException.class);
+        redis.setTimeout(1, TimeUnit.MICROSECONDS);
+        assertThatThrownBy(() -> redis.blpop(1, "unknown")).isInstanceOf(RedisCommandTimeoutException.class);
 
         redis.setTimeout(Duration.ofSeconds(60));
     }
@@ -123,8 +123,8 @@ class ClientIntegrationTests extends TestSupport {
 
         RedisClient client = RedisClient.create(clientResources, "redis://invalid");
 
-        assertThatThrownBy(client::connect).isInstanceOf(RedisConnectionException.class).hasMessageContaining(
-                "Unable to connect");
+        assertThatThrownBy(client::connect).isInstanceOf(RedisConnectionException.class)
+                .hasMessageContaining("Unable to connect");
 
         FastShutdown.shutdown(client);
     }
@@ -135,8 +135,8 @@ class ClientIntegrationTests extends TestSupport {
 
         RedisClient client = RedisClient.create(clientResources, "redis://invalid");
 
-        assertThatThrownBy(client::connectPubSub).isInstanceOf(RedisConnectionException.class).hasMessageContaining(
-                "Unable to connect");
+        assertThatThrownBy(client::connectPubSub).isInstanceOf(RedisConnectionException.class)
+                .hasMessageContaining("Unable to connect");
         FastShutdown.shutdown(client);
     }
 
@@ -233,4 +233,5 @@ class ClientIntegrationTests extends TestSupport {
 
         connection.close();
     }
+
 }

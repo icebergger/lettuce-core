@@ -88,18 +88,21 @@ public interface RedisStreamReactiveCommands<K, V> {
      * @param consumer consumer identified by group name and consumer key.
      * @param minIdleTime
      * @param messageIds message Id's to claim.
-     * @return simple-reply the {@link StreamMessage}
+     * @return simple-reply the {@link StreamMessage}.
      */
     Flux<StreamMessage<K, V>> xclaim(K key, Consumer<K> consumer, long minIdleTime, String... messageIds);
 
     /**
      * Gets ownership of one or multiple messages in the Pending Entries List of a given stream consumer group.
+     * <p>
+     * Note that setting the {@code JUSTID} flag (calling this method with {@link XClaimArgs#justid()}) suppresses the message
+     * bode and {@link StreamMessage#getBody()} is {@code null}.
      *
      * @param key the stream key.
      * @param consumer consumer identified by group name and consumer key.
      * @param args
      * @param messageIds message Id's to claim.
-     * @return simple-reply the {@link StreamMessage}
+     * @return simple-reply the {@link StreamMessage}.
      */
     Flux<StreamMessage<K, V>> xclaim(K key, Consumer<K> consumer, XClaimArgs args, String... messageIds);
 
@@ -118,7 +121,7 @@ public interface RedisStreamReactiveCommands<K, V> {
      *
      * @param streamOffset name of the stream containing the offset to set.
      * @param group name of the consumer group.
-     * @return simple-reply {@literal true} if successful.
+     * @return simple-reply {@code true} if successful.
      */
     Mono<String> xgroupCreate(StreamOffset<K> streamOffset, K group);
 
@@ -128,7 +131,7 @@ public interface RedisStreamReactiveCommands<K, V> {
      * @param streamOffset name of the stream containing the offset to set.
      * @param group name of the consumer group.
      * @param args
-     * @return simple-reply {@literal true} if successful.
+     * @return simple-reply {@code true} if successful.
      * @since 5.2
      */
     Mono<String> xgroupCreate(StreamOffset<K> streamOffset, K group, XGroupCreateArgs args);
@@ -138,7 +141,7 @@ public interface RedisStreamReactiveCommands<K, V> {
      *
      * @param key the stream key.
      * @param consumer consumer identified by group name and consumer key.
-     * @return simple-reply {@literal true} if successful.
+     * @return simple-reply {@code true} if successful.
      */
     Mono<Boolean> xgroupDelconsumer(K key, Consumer<K> consumer);
 
@@ -147,7 +150,7 @@ public interface RedisStreamReactiveCommands<K, V> {
      *
      * @param key the stream key.
      * @param group name of the consumer group.
-     * @return simple-reply {@literal true} if successful.
+     * @return simple-reply {@code true} if successful.
      */
     Mono<Boolean> xgroupDestroy(K key, K group);
 
@@ -156,7 +159,7 @@ public interface RedisStreamReactiveCommands<K, V> {
      *
      * @param streamOffset name of the stream containing the offset to set.
      * @param group name of the consumer group.
-     * @return simple-reply OK
+     * @return simple-reply OK.
      */
     Mono<String> xgroupSetid(StreamOffset<K> streamOffset, K group);
 
@@ -210,8 +213,8 @@ public interface RedisStreamReactiveCommands<K, V> {
      *
      * @param key the stream key.
      * @param group name of the consumer group.
-     * @param range must not be {@literal null}.
-     * @param limit must not be {@literal null}.
+     * @param range must not be {@code null}.
+     * @param limit must not be {@code null}.
      * @return Object array-reply list with members of the resulting stream.
      */
     Flux<Object> xpending(K key, K group, Range<String> range, Limit limit);
@@ -221,8 +224,8 @@ public interface RedisStreamReactiveCommands<K, V> {
      *
      * @param key the stream key.
      * @param consumer consumer identified by group name and consumer key.
-     * @param range must not be {@literal null}.
-     * @param limit must not be {@literal null}.
+     * @param range must not be {@code null}.
+     * @param limit must not be {@code null}.
      * @return Object array-reply list with members of the resulting stream.
      */
     Flux<Object> xpending(K key, Consumer<K> consumer, Range<String> range, Limit limit);
@@ -231,7 +234,7 @@ public interface RedisStreamReactiveCommands<K, V> {
      * Read messages from a stream within a specific {@link Range}.
      *
      * @param key the stream key.
-     * @param range must not be {@literal null}.
+     * @param range must not be {@code null}.
      * @return StreamMessage array-reply list with members of the resulting stream.
      */
     Flux<StreamMessage<K, V>> xrange(K key, Range<String> range);
@@ -240,8 +243,8 @@ public interface RedisStreamReactiveCommands<K, V> {
      * Read messages from a stream within a specific {@link Range} applying a {@link Limit}.
      *
      * @param key the stream key.
-     * @param range must not be {@literal null}.
-     * @param limit must not be {@literal null}.
+     * @param range must not be {@code null}.
+     * @param limit must not be {@code null}.
      * @return StreamMessage array-reply list with members of the resulting stream.
      */
     Flux<StreamMessage<K, V>> xrange(K key, Range<String> range, Limit limit);
@@ -286,7 +289,7 @@ public interface RedisStreamReactiveCommands<K, V> {
      * Read messages from a stream within a specific {@link Range} in reverse order.
      *
      * @param key the stream key.
-     * @param range must not be {@literal null}.
+     * @param range must not be {@code null}.
      * @return StreamMessage array-reply list with members of the resulting stream.
      */
     Flux<StreamMessage<K, V>> xrevrange(K key, Range<String> range);
@@ -295,8 +298,8 @@ public interface RedisStreamReactiveCommands<K, V> {
      * Read messages from a stream within a specific {@link Range} applying a {@link Limit} in reverse order.
      *
      * @param key the stream key.
-     * @param range must not be {@literal null}.
-     * @param limit must not be {@literal null}.
+     * @param range must not be {@code null}.
+     * @param limit must not be {@code null}.
      * @return StreamMessage array-reply list with members of the resulting stream.
      */
     Flux<StreamMessage<K, V>> xrevrange(K key, Range<String> range, Limit limit);
@@ -314,9 +317,10 @@ public interface RedisStreamReactiveCommands<K, V> {
      * Trims the stream to {@code count} elements.
      *
      * @param key the stream key.
-     * @param approximateTrimming {@literal true} to trim approximately using the {@code ~} flag.
+     * @param approximateTrimming {@code true} to trim approximately using the {@code ~} flag.
      * @param count length of the stream.
      * @return simple-reply number of removed entries.
      */
     Mono<Long> xtrim(K key, boolean approximateTrimming, long count);
+
 }

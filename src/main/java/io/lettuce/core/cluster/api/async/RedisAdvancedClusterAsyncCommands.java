@@ -34,6 +34,7 @@ import io.lettuce.core.output.KeyStreamingChannel;
  * Advanced asynchronous and thread-safe Redis Cluster API.
  *
  * @author Mark Paluch
+ * @author Jon Chambers
  * @since 4.0
  */
 public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsyncCommands<K, V> {
@@ -44,8 +45,8 @@ public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsy
      * In contrast to the {@link RedisAdvancedClusterAsyncCommands}, node-connections do not route commands to other cluster
      * nodes
      *
-     * @param nodeId the node Id
-     * @return a connection to the requested cluster node
+     * @param nodeId the node Id.
+     * @return a connection to the requested cluster node.
      */
     RedisClusterAsyncCommands<K, V> getConnection(String nodeId);
 
@@ -55,9 +56,9 @@ public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsy
      * connections are verified by default for cluster membership, see
      * {@link ClusterClientOptions#isValidateClusterNodeMembership()}.
      *
-     * @param host the host
-     * @param port the port
-     * @return a connection to the requested cluster node
+     * @param host the host.
+     * @param port the port.
+     * @return a connection to the requested cluster node.
      */
     RedisClusterAsyncCommands<K, V> getConnection(String host, int port);
 
@@ -79,7 +80,7 @@ public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsy
      * Select all replicas.
      *
      * @return API with asynchronous executed commands on a selection of replica cluster nodes.
-     * @deprecated since 5.2, use {@link #replicas()}
+     * @deprecated since 5.2, use {@link #replicas()}.
      */
     @Deprecated
     default AsyncNodeSelection<K, V> slaves() {
@@ -89,14 +90,14 @@ public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsy
     /**
      * Select all replicas.
      *
-     * @param predicate Predicate to filter nodes
+     * @param predicate Predicate to filter nodes.
      * @return API with asynchronous executed commands on a selection of replica cluster nodes.
-     * @deprecated use {@link #replicas(Predicate)}
+     * @deprecated use {@link #replicas(Predicate)}.
      */
     @Deprecated
     default AsyncNodeSelection<K, V> slaves(Predicate<RedisClusterNode> predicate) {
-        return readonly(redisClusterNode -> predicate.test(redisClusterNode)
-                && redisClusterNode.is(RedisClusterNode.NodeFlag.SLAVE));
+        return readonly(
+                redisClusterNode -> predicate.test(redisClusterNode) && redisClusterNode.is(RedisClusterNode.NodeFlag.SLAVE));
     }
 
     /**
@@ -112,13 +113,13 @@ public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsy
     /**
      * Select all replicas.
      *
-     * @param predicate Predicate to filter nodes
+     * @param predicate Predicate to filter nodes.
      * @return API with asynchronous executed commands on a selection of replica cluster nodes.
      * @since 5.2
      */
     default AsyncNodeSelection<K, V> replicas(Predicate<RedisClusterNode> predicate) {
-        return readonly(redisClusterNode -> predicate.test(redisClusterNode)
-                && redisClusterNode.is(RedisClusterNode.NodeFlag.REPLICA));
+        return readonly(
+                redisClusterNode -> predicate.test(redisClusterNode) && redisClusterNode.is(RedisClusterNode.NodeFlag.REPLICA));
     }
 
     /**
@@ -134,8 +135,8 @@ public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsy
      * Select replica nodes by a predicate and keeps a static selection. Replica connections operate in {@literal READONLY}
      * mode. The set of nodes within the {@link NodeSelectionSupport} does not change when the cluster view changes.
      *
-     * @param predicate Predicate to filter nodes
-     * @return API with asynchronous executed commands on a selection of cluster nodes matching {@code predicate}
+     * @param predicate Predicate to filter nodes.
+     * @return API with asynchronous executed commands on a selection of cluster nodes matching {@code predicate}.
      */
     AsyncNodeSelection<K, V> readonly(Predicate<RedisClusterNode> predicate);
 
@@ -143,25 +144,25 @@ public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsy
      * Select nodes by a predicate and keeps a static selection. The set of nodes within the {@link NodeSelectionSupport} does
      * not change when the cluster view changes.
      *
-     * @param predicate Predicate to filter nodes
-     * @return API with asynchronous executed commands on a selection of cluster nodes matching {@code predicate}
+     * @param predicate Predicate to filter nodes.
+     * @return API with asynchronous executed commands on a selection of cluster nodes matching {@code predicate}.
      */
     AsyncNodeSelection<K, V> nodes(Predicate<RedisClusterNode> predicate);
 
     /**
-     * Select nodes by a predicate
+     * Select nodes by a predicate.
      *
-     * @param predicate Predicate to filter nodes
+     * @param predicate Predicate to filter nodes.
      * @param dynamic Defines, whether the set of nodes within the {@link NodeSelectionSupport} can change when the cluster view
      *        changes.
-     * @return API with asynchronous executed commands on a selection of cluster nodes matching {@code predicate}
+     * @return API with asynchronous executed commands on a selection of cluster nodes matching {@code predicate}.
      */
     AsyncNodeSelection<K, V> nodes(Predicate<RedisClusterNode> predicate, boolean dynamic);
 
     /**
      * Delete one or more keys with pipelining. Cross-slot keys will result in multiple calls to the particular cluster nodes.
      *
-     * @param keys the keys
+     * @param keys the keys.
      * @return Long integer-reply The number of keys that were removed.
      * @see RedisKeyAsyncCommands#del(Object[])
      */
@@ -170,7 +171,7 @@ public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsy
     /**
      * Unlink one or more keys with pipelining. Cross-slot keys will result in multiple calls to the particular cluster nodes.
      *
-     * @param keys the keys
+     * @param keys the keys.
      * @return Long integer-reply The number of keys that were removed.
      * @see RedisKeyAsyncCommands#unlink(Object[])
      */
@@ -180,8 +181,8 @@ public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsy
      * Determine how many keys exist with pipelining. Cross-slot keys will result in multiple calls to the particular cluster
      * nodes.
      *
-     * @param keys the keys
-     * @return Long integer-reply specifically: Number of existing keys
+     * @param keys the keys.
+     * @return Long integer-reply specifically: Number of existing keys.
      */
     RedisFuture<Long> exists(K... keys);
 
@@ -189,7 +190,7 @@ public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsy
      * Get the values of all the given keys with pipelining. Cross-slot keys will result in multiple calls to the particular
      * cluster nodes.
      *
-     * @param keys the key
+     * @param keys the key.
      * @return List&lt;V&gt; array-reply list of values at the specified keys.
      * @see RedisStringAsyncCommands#mget(Object[])
      */
@@ -199,7 +200,7 @@ public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsy
      * Set multiple keys to multiple values with pipelining. Cross-slot keys will result in multiple calls to the particular
      * cluster nodes.
      *
-     * @param map the map
+     * @param map the map.
      * @return String simple-string-reply always {@code OK} since {@code MSET} can't fail.
      * @see RedisStringAsyncCommands#mset(Map)
      */
@@ -209,7 +210,7 @@ public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsy
      * Set multiple keys to multiple values, only if none of the keys exist with pipelining. Cross-slot keys will result in
      * multiple calls to the particular cluster nodes.
      *
-     * @param map the null
+     * @param map the null.
      * @return Boolean integer-reply specifically:
      *
      *         {@code 1} if the all the keys were set. {@code 0} if no key was set (at least one key already existed).
@@ -220,7 +221,7 @@ public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsy
     /**
      * Set the current connection name on all cluster nodes with pipelining.
      *
-     * @param name the client name
+     * @param name the client name.
      * @return simple-string-reply {@code OK} if the connection name was successfully set.
      * @see RedisServerAsyncCommands#clientSetname(Object)
      */
@@ -229,15 +230,24 @@ public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsy
     /**
      * Remove all keys from all databases on all cluster masters with pipelining.
      *
-     * @return String simple-string-reply
+     * @return String simple-string-reply.
      * @see RedisServerAsyncCommands#flushall()
      */
     RedisFuture<String> flushall();
 
     /**
-     * Remove all keys from the current database on all cluster masters with pipelining.
+     * Remove all keys asynchronously from all databases on all cluster upstream nodes with pipelining.
      *
      * @return String simple-string-reply
+     * @see RedisServerAsyncCommands#flushallAsync()
+     * @since 5.3.3
+     */
+    RedisFuture<String> flushallAsync();
+
+    /**
+     * Remove all keys from the current database on all cluster masters with pipelining.
+     *
+     * @return String simple-string-reply.
      * @see RedisServerAsyncCommands#flushdb()
      */
     RedisFuture<String> flushdb();
@@ -245,7 +255,7 @@ public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsy
     /**
      * Return the number of keys in the selected database on all cluster masters.
      *
-     * @return Long integer-reply
+     * @return Long integer-reply.
      * @see RedisServerAsyncCommands#dbsize()
      */
     RedisFuture<Long> dbsize();
@@ -253,7 +263,7 @@ public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsy
     /**
      * Find all keys matching the given pattern on all cluster masters.
      *
-     * @param pattern the pattern type: patternkey (pattern)
+     * @param pattern the pattern type: patternkey (pattern).
      * @return List&lt;K&gt; array-reply list of keys matching {@code pattern}.
      * @see RedisKeyAsyncCommands#keys(Object)
      */
@@ -262,8 +272,8 @@ public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsy
     /**
      * Find all keys matching the given pattern on all cluster masters.
      *
-     * @param channel the channel
-     * @param pattern the pattern
+     * @param channel the channel.
+     * @param pattern the pattern.
      * @return Long array-reply list of keys matching {@code pattern}.
      * @see RedisKeyAsyncCommands#keys(KeyStreamingChannel, Object)
      */
@@ -272,15 +282,15 @@ public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsy
     /**
      * Return a random key from the keyspace on a random master.
      *
-     * @return V bulk-string-reply the random key, or {@literal null} when the database is empty.
+     * @return K bulk-string-reply the random key, or {@code null} when the database is empty.
      * @see RedisKeyAsyncCommands#randomkey()
      */
-    RedisFuture<V> randomkey();
+    RedisFuture<K> randomkey();
 
     /**
      * Remove all the scripts from the script cache on all cluster nodes.
      *
-     * @return String simple-string-reply
+     * @return String simple-string-reply.
      * @see RedisScriptingAsyncCommands#scriptFlush()
      */
     RedisFuture<String> scriptFlush();
@@ -296,7 +306,7 @@ public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsy
     /**
      * Load the specified Lua script into the script cache on all cluster nodes.
      *
-     * @param script script content
+     * @param script script content.
      * @return String bulk-string-reply This command returns the SHA1 digest of the script added into the script cache.
      */
     RedisFuture<String> scriptLoad(V script);
@@ -304,7 +314,7 @@ public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsy
     /**
      * Synchronously save the dataset to disk and then shut down all nodes of the cluster.
      *
-     * @param save {@literal true} force save operation
+     * @param save {@code true} force save operation.
      * @see RedisServerAsyncCommands#shutdown(boolean)
      */
     void shutdown(boolean save);
@@ -320,7 +330,7 @@ public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsy
     /**
      * Incrementally iterate the keys space over the whole Cluster.
      *
-     * @param scanArgs scan arguments
+     * @param scanArgs scan arguments.
      * @return KeyScanCursor&lt;K&gt; scan cursor.
      * @see RedisKeyAsyncCommands#scan(ScanArgs)
      */
@@ -331,7 +341,7 @@ public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsy
      *
      * @param scanCursor cursor to resume the scan. It's required to reuse the {@code scanCursor} instance from the previous
      *        {@link #scan()} call.
-     * @param scanArgs scan arguments
+     * @param scanArgs scan arguments.
      * @return KeyScanCursor&lt;K&gt; scan cursor.
      * @see RedisKeyAsyncCommands#scan(ScanCursor, ScanArgs)
      */
@@ -350,7 +360,7 @@ public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsy
     /**
      * Incrementally iterate the keys space over the whole Cluster.
      *
-     * @param channel streaming channel that receives a call for every key
+     * @param channel streaming channel that receives a call for every key.
      * @return StreamScanCursor scan cursor.
      * @see RedisKeyAsyncCommands#scan(KeyStreamingChannel)
      */
@@ -359,8 +369,8 @@ public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsy
     /**
      * Incrementally iterate the keys space over the whole Cluster.
      *
-     * @param channel streaming channel that receives a call for every key
-     * @param scanArgs scan arguments
+     * @param channel streaming channel that receives a call for every key.
+     * @param scanArgs scan arguments.
      * @return StreamScanCursor scan cursor.
      * @see RedisKeyAsyncCommands#scan(KeyStreamingChannel, ScanArgs)
      */
@@ -369,10 +379,10 @@ public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsy
     /**
      * Incrementally iterate the keys space over the whole Cluster.
      *
-     * @param channel streaming channel that receives a call for every key
+     * @param channel streaming channel that receives a call for every key.
      * @param scanCursor cursor to resume the scan. It's required to reuse the {@code scanCursor} instance from the previous
      *        {@link #scan()} call.
-     * @param scanArgs scan arguments
+     * @param scanArgs scan arguments.
      * @return StreamScanCursor scan cursor.
      * @see RedisKeyAsyncCommands#scan(KeyStreamingChannel, ScanCursor, ScanArgs)
      */
@@ -381,7 +391,7 @@ public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsy
     /**
      * Incrementally iterate the keys space over the whole Cluster.
      *
-     * @param channel streaming channel that receives a call for every key
+     * @param channel streaming channel that receives a call for every key.
      * @param scanCursor cursor to resume the scan. It's required to reuse the {@code scanCursor} instance from the previous
      *        {@link #scan()} call.
      * @return StreamScanCursor scan cursor.
@@ -393,8 +403,9 @@ public interface RedisAdvancedClusterAsyncCommands<K, V> extends RedisClusterAsy
      * Touch one or more keys with pipelining. Touch sets the last accessed time for a key. Non-exsitent keys wont get created.
      * Cross-slot keys will result in multiple calls to the particular cluster nodes.
      *
-     * @param keys the keys
+     * @param keys the keys.
      * @return Long integer-reply the number of found keys.
      */
     RedisFuture<Long> touch(K... keys);
+
 }

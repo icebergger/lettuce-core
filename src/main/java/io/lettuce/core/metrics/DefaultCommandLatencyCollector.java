@@ -27,13 +27,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
-import java.util.function.Function;
 
 import org.HdrHistogram.Histogram;
 import org.LatencyUtils.LatencyStats;
 import org.LatencyUtils.PauseDetector;
 import org.LatencyUtils.SimplePauseDetector;
 
+import io.lettuce.core.internal.LettuceAssert;
 import io.lettuce.core.metrics.CommandMetrics.CommandLatency;
 import io.lettuce.core.protocol.CommandType;
 import io.lettuce.core.protocol.ProtocolKeyword;
@@ -52,51 +52,40 @@ public class DefaultCommandLatencyCollector implements CommandLatencyCollector {
             .newUpdater(DefaultCommandLatencyCollector.class, PauseDetectorWrapper.class, "pauseDetectorWrapper");
 
     private static final boolean LATENCY_UTILS_AVAILABLE = isPresent("org.LatencyUtils.PauseDetector");
+
     private static final boolean HDR_UTILS_AVAILABLE = isPresent("org.HdrHistogram.Histogram");
+
     private static final PauseDetectorWrapper GLOBAL_PAUSE_DETECTOR = PauseDetectorWrapper.create();
 
     private static final long MIN_LATENCY = 1000;
+
     private static final long MAX_LATENCY = TimeUnit.MINUTES.toNanos(5);
 
     private final CommandLatencyCollectorOptions options;
 
-    // Updated via PAUSE_DETECTOR_UPDATER
-    private volatile PauseDetectorWrapper pauseDetectorWrapper;
-
     private final AtomicReference<Map<CommandLatencyId, Latencies>> latencyMetricsRef = new AtomicReference<>(
             createNewLatencyMap());
 
+    // Updated via PAUSE_DETECTOR_UPDATER
+    private volatile PauseDetectorWrapper pauseDetectorWrapper;
+
     private volatile boolean stopped;
-    private final Function<CommandLatencyId, Latencies> createLatencies;
 
     public DefaultCommandLatencyCollector(CommandLatencyCollectorOptions options) {
 
+        LettuceAssert.notNull(options, "CommandLatencyCollectorOptions must not be null");
+
         this.options = options;
-        this.createLatencies = id -> {
-
-            if (PAUSE_DETECTOR_UPDATER.get(this) == null) {
-                if (PAUSE_DETECTOR_UPDATER.compareAndSet(this, null, GLOBAL_PAUSE_DETECTOR)) {
-                    PAUSE_DETECTOR_UPDATER.get(this).retain();
-                }
-            }
-            PauseDetector pauseDetector = ((DefaultPauseDetectorWrapper) PAUSE_DETECTOR_UPDATER.get(this)).getPauseDetector();
-
-            if (options.resetLatenciesAfterEvent()) {
-                return new Latencies(pauseDetector);
-            }
-
-            return new CummulativeLatencies(pauseDetector);
-        };
     }
 
     /**
      * Record the command latency per {@code connectionPoint} and {@code commandType}.
      *
-     * @param local the local address
-     * @param remote the remote address
-     * @param commandType the command type
-     * @param firstResponseLatency latency value in {@link TimeUnit#NANOSECONDS} from send to the first response
-     * @param completionLatency latency value in {@link TimeUnit#NANOSECONDS} from send to the command completion
+     * @param local the local address.
+     * @param remote the remote address.
+     * @param commandType the command type.
+     * @param firstResponseLatency latency value in {@link TimeUnit#NANOSECONDS} from send to the first response.
+     * @param completionLatency latency value in {@link TimeUnit#NANOSECONDS} from send to the command completion.
      */
     public void recordCommandLatency(SocketAddress local, SocketAddress remote, ProtocolKeyword commandType,
             long firstResponseLatency, long completionLatency) {
@@ -105,7 +94,26 @@ public class DefaultCommandLatencyCollector implements CommandLatencyCollector {
             return;
         }
 
-        Latencies latencies = latencyMetricsRef.get().computeIfAbsent(createId(local, remote, commandType), createLatencies);
+        PauseDetector pauseDetector;
+
+        do {
+            if (PAUSE_DETECTOR_UPDATER.get(this) == null) {
+                if (PAUSE_DETECTOR_UPDATER.compareAndSet(this, null, GLOBAL_PAUSE_DETECTOR)) {
+                    PAUSE_DETECTOR_UPDATER.get(this).retain();
+                }
+            }
+            pauseDetector = ((DefaultPauseDetectorWrapper) PAUSE_DETECTOR_UPDATER.get(this)).getPauseDetector();
+        } while (pauseDetector == null);
+
+        PauseDetector pauseDetectorToUse = pauseDetector;
+        Latencies latencies = latencyMetricsRef.get().computeIfAbsent(createId(local, remote, commandType), id -> {
+
+            if (options.resetLatenciesAfterEvent()) {
+                return new Latencies(pauseDetectorToUse);
+            }
+
+            return new CummulativeLatencies(pauseDetectorToUse);
+        });
 
         latencies.firstResponse.recordLatency(rangify(firstResponseLatency));
         latencies.completion.recordLatency(rangify(completionLatency));
@@ -191,13 +199,13 @@ public class DefaultCommandLatencyCollector implements CommandLatencyCollector {
         Map<Double, Long> percentiles = getPercentiles(histogram);
 
         TimeUnit timeUnit = options.targetUnit();
-        return new CommandLatency(timeUnit.convert(histogram.getMinValue(), TimeUnit.NANOSECONDS), timeUnit.convert(
-                histogram.getMaxValue(), TimeUnit.NANOSECONDS), percentiles);
+        return new CommandLatency(timeUnit.convert(histogram.getMinValue(), TimeUnit.NANOSECONDS),
+                timeUnit.convert(histogram.getMaxValue(), TimeUnit.NANOSECONDS), percentiles);
     }
 
     private Map<Double, Long> getPercentiles(Histogram histogram) {
 
-        Map<Double, Long> percentiles = new TreeMap<Double, Long>();
+        Map<Double, Long> percentiles = new TreeMap<>();
         for (double targetPercentile : options.targetPercentiles()) {
             percentiles.put(targetPercentile,
                     options.targetUnit().convert(histogram.getValueAtPercentile(targetPercentile), TimeUnit.NANOSECONDS));
@@ -207,7 +215,7 @@ public class DefaultCommandLatencyCollector implements CommandLatencyCollector {
     }
 
     /**
-     * Returns {@literal true} if HdrUtils and LatencyUtils are available on the class path.
+     * Returns {@code true} if HdrUtils and LatencyUtils are available on the class path.
      *
      * @return
      */
@@ -227,6 +235,7 @@ public class DefaultCommandLatencyCollector implements CommandLatencyCollector {
     public static CommandLatencyCollector disabled() {
 
         return new CommandLatencyCollector() {
+
             @Override
             public void recordCommandLatency(SocketAddress local, SocketAddress remote, ProtocolKeyword commandType,
                     long firstResponseLatency, long completionLatency) {
@@ -245,12 +254,14 @@ public class DefaultCommandLatencyCollector implements CommandLatencyCollector {
             public boolean isEnabled() {
                 return false;
             }
+
         };
     }
 
     private static class Latencies {
 
         private final LatencyStats firstResponse;
+
         private final LatencyStats completion;
 
         Latencies(PauseDetector pauseDetector) {
@@ -270,11 +281,13 @@ public class DefaultCommandLatencyCollector implements CommandLatencyCollector {
             firstResponse.stop();
             completion.stop();
         }
+
     }
 
     private static class CummulativeLatencies extends Latencies {
 
         private final Histogram firstResponse;
+
         private final Histogram completion;
 
         CummulativeLatencies(PauseDetector pauseDetector) {
@@ -297,6 +310,7 @@ public class DefaultCommandLatencyCollector implements CommandLatencyCollector {
             completion.add(super.getFirstResponseHistogram());
             return completion;
         }
+
     }
 
     /**
@@ -308,6 +322,7 @@ public class DefaultCommandLatencyCollector implements CommandLatencyCollector {
          * No-operation {@link PauseDetectorWrapper} implementation.
          */
         PauseDetectorWrapper NO_OP = new PauseDetectorWrapper() {
+
             @Override
             public void release() {
             }
@@ -315,6 +330,7 @@ public class DefaultCommandLatencyCollector implements CommandLatencyCollector {
             @Override
             public void retain() {
             }
+
         };
 
         static PauseDetectorWrapper create() {
@@ -335,6 +351,7 @@ public class DefaultCommandLatencyCollector implements CommandLatencyCollector {
          * Release reference to {@link PauseDetectorWrapper} and decrement reference counter.
          */
         void release();
+
     }
 
     /**
@@ -346,57 +363,82 @@ public class DefaultCommandLatencyCollector implements CommandLatencyCollector {
 
         private final AtomicLong counter = new AtomicLong();
 
+        private final Object mutex = new Object();
+
         private volatile PauseDetector pauseDetector;
 
+        private volatile Thread shutdownHook;
+
         /**
-         * Creates or initializes a {@link PauseDetector} instance.
+         * Obtain the current {@link PauseDetector}. Requires a call to {@link #retain()} first.
          *
          * @return
          */
-        PauseDetector getPauseDetector() {
-
-            while (pauseDetector == null) {
-
-                try {
-                    Thread.sleep(1);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    return pauseDetector;
-                }
-            }
-
+        public PauseDetector getPauseDetector() {
             return pauseDetector;
         }
 
+        /**
+         * Creates or initializes a {@link PauseDetector} instance after incrementing the usage counter to one. Should be
+         * {@link #release() released} once it is no longer in use.
+         */
         public void retain() {
 
             if (counter.incrementAndGet() == 1) {
 
-                if (instanceCounter.getAndIncrement() > 0) {
-                    InternalLogger instance = InternalLoggerFactory.getInstance(getClass());
-                    instance.info("Initialized PauseDetectorWrapper more than once.");
-                }
+                // Avoid concurrent calls to retain/release
+                synchronized (mutex) {
 
-                pauseDetector = new SimplePauseDetector(TimeUnit.MILLISECONDS.toNanos(10), TimeUnit.MILLISECONDS.toNanos(10), 3);
-                Runtime.getRuntime().addShutdownHook(new Thread("ShutdownHook for SimplePauseDetector") {
-                    @Override
-                    public void run() {
-                        if (pauseDetector != null) {
+                    if (instanceCounter.getAndIncrement() > 0) {
+                        InternalLogger instance = InternalLoggerFactory.getInstance(getClass());
+                        instance.info("Initialized PauseDetectorWrapper more than once.");
+                    }
+
+                    PauseDetector pauseDetector = new SimplePauseDetector(TimeUnit.MILLISECONDS.toNanos(10),
+                            TimeUnit.MILLISECONDS.toNanos(10), 3);
+
+                    shutdownHook = new Thread("ShutdownHook for SimplePauseDetector") {
+
+                        @Override
+                        public void run() {
                             pauseDetector.shutdown();
                         }
-                    }
-                });
+
+                    };
+
+                    this.pauseDetector = pauseDetector;
+                    Runtime.getRuntime().addShutdownHook(shutdownHook);
+                }
             }
         }
 
+        /**
+         * Decrements the usage counter. When reaching {@code 0}, the {@link PauseDetector} instance is released.
+         */
         public void release() {
 
             if (counter.decrementAndGet() == 0) {
 
-                instanceCounter.decrementAndGet();
-                pauseDetector.shutdown();
-                pauseDetector = null;
+                // Avoid concurrent calls to retain/release
+                synchronized (mutex) {
+
+                    instanceCounter.decrementAndGet();
+
+                    pauseDetector.shutdown();
+                    pauseDetector = null;
+
+                    try {
+                        Runtime.getRuntime().removeShutdownHook(shutdownHook);
+                    } catch (IllegalStateException e) {
+                        // Do not prevent shutdown
+                        // java.lang.IllegalStateException: Shutdown in progress
+                    }
+
+                    shutdownHook = null;
+                }
             }
         }
+
     }
+
 }

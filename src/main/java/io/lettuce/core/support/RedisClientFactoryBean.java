@@ -22,8 +22,7 @@ import io.lettuce.core.RedisURI;
 
 /**
  * Factory Bean for {@link RedisClient} instances. Needs either a {@link java.net.URI} or a {@link RedisURI} as input and allows
- * to reuse {@link io.lettuce.core.resource.ClientResources}. URI Formats:
- * {@code
+ * to reuse {@link io.lettuce.core.resource.ClientResources}. URI Formats: {@code
  *     redis-sentinel://host[:port][,host2[:port2]][/databaseNumber]#sentinelMasterId
  * }
  *
@@ -35,7 +34,9 @@ import io.lettuce.core.RedisURI;
  * @see ClientResourcesFactoryBean
  * @author Mark Paluch
  * @since 3.0
+ * @deprecated since 5.3, use Lettuce through Spring Data Redis. This class will be removed with Lettuce 6.
  */
+@Deprecated
 public class RedisClientFactoryBean extends LettuceFactoryBeanSupport<RedisClient> {
 
     @Override
@@ -71,4 +72,5 @@ public class RedisClientFactoryBean extends LettuceFactoryBeanSupport<RedisClien
         }
         return RedisClient.create(getRedisURI());
     }
+
 }

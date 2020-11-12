@@ -50,35 +50,51 @@ import io.netty.util.internal.logging.InternalLoggerFactory;
 public class DefaultEndpoint implements RedisChannelWriter, Endpoint {
 
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(DefaultEndpoint.class);
-    private static final AtomicLong ENDPOINT_COUNTER = new AtomicLong();
-    private static final AtomicIntegerFieldUpdater<DefaultEndpoint> QUEUE_SIZE = AtomicIntegerFieldUpdater.newUpdater(
-            DefaultEndpoint.class, "queueSize");
 
-    private static final AtomicIntegerFieldUpdater<DefaultEndpoint> STATUS = AtomicIntegerFieldUpdater.newUpdater(
-            DefaultEndpoint.class, "status");
+    private static final AtomicLong ENDPOINT_COUNTER = new AtomicLong();
+
+    private static final AtomicIntegerFieldUpdater<DefaultEndpoint> QUEUE_SIZE = AtomicIntegerFieldUpdater
+            .newUpdater(DefaultEndpoint.class, "queueSize");
+
+    private static final AtomicIntegerFieldUpdater<DefaultEndpoint> STATUS = AtomicIntegerFieldUpdater
+            .newUpdater(DefaultEndpoint.class, "status");
 
     private static final int ST_OPEN = 0;
+
     private static final int ST_CLOSED = 1;
 
     protected volatile Channel channel;
 
     private final Reliability reliability;
+
     private final ClientOptions clientOptions;
+
     private final ClientResources clientResources;
+
     private final Queue<RedisCommand<?, ?, ?>> disconnectedBuffer;
+
     private final Queue<RedisCommand<?, ?, ?>> commandBuffer;
+
     private final boolean boundedQueues;
+
     private final boolean rejectCommandsWhileDisconnected;
 
     private final long endpointId = ENDPOINT_COUNTER.incrementAndGet();
+
     private final SharedLock sharedLock = new SharedLock();
+
     private final boolean debugEnabled = logger.isDebugEnabled();
+
     private final CompletableFuture<Void> closeFuture = new CompletableFuture<>();
 
     private String logPrefix;
+
     private boolean autoFlushCommands = true;
 
+    private boolean inActivation = false;
+
     private ConnectionWatchdog connectionWatchdog;
+
     private ConnectionFacade connectionFacade;
 
     private volatile Throwable connectionError;
@@ -94,8 +110,8 @@ public class DefaultEndpoint implements RedisChannelWriter, Endpoint {
     /**
      * Create a new {@link DefaultEndpoint}.
      *
-     * @param clientOptions client options for this connection, must not be {@literal null}.
-     * @param clientResources client resources for this connection, must not be {@literal null}.
+     * @param clientOptions client options for this connection, must not be {@code null}.
+     * @param clientResources client resources for this connection, must not be {@code null}.
      */
     public DefaultEndpoint(ClientOptions clientOptions, ClientResources clientResources) {
 
@@ -136,6 +152,10 @@ public class DefaultEndpoint implements RedisChannelWriter, Endpoint {
 
             validateWrite(1);
 
+            if (inActivation) {
+                command = processActivationCommand(command);
+            }
+
             if (autoFlushCommands) {
 
                 if (isConnected()) {
@@ -168,6 +188,10 @@ public class DefaultEndpoint implements RedisChannelWriter, Endpoint {
 
             validateWrite(commands.size());
 
+            if (inActivation) {
+                commands = processActivationCommands(commands);
+            }
+
             if (autoFlushCommands) {
 
                 if (isConnected()) {
@@ -187,6 +211,32 @@ public class DefaultEndpoint implements RedisChannelWriter, Endpoint {
         }
 
         return (Collection<RedisCommand<K, V, ?>>) commands;
+    }
+
+    private <K, V, T> RedisCommand<K, V, T> processActivationCommand(RedisCommand<K, V, T> command) {
+
+        if (!ActivationCommand.isActivationCommand(command)) {
+            return new ActivationCommand<>(command);
+        }
+
+        return command;
+    }
+
+    private <K, V> Collection<RedisCommand<K, V, ?>> processActivationCommands(
+            Collection<? extends RedisCommand<K, V, ?>> commands) {
+
+        Collection<RedisCommand<K, V, ?>> commandsToReturn = new ArrayList<>(commands.size());
+
+        for (RedisCommand<K, V, ?> command : commands) {
+
+            if (!ActivationCommand.isActivationCommand(command)) {
+                command = new ActivationCommand<>(command);
+            }
+
+            commandsToReturn.add(command);
+        }
+
+        return commandsToReturn;
     }
 
     private void validateWrite(int commands) {
@@ -376,7 +426,12 @@ public class DefaultEndpoint implements RedisChannelWriter, Endpoint {
                     logger.debug("{} activating endpoint", logPrefix());
                 }
 
-                connectionFacade.activated();
+                try {
+                    inActivation = true;
+                    connectionFacade.activated();
+                } finally {
+                    inActivation = false;
+                }
 
                 flushCommands(disconnectedBuffer);
             } catch (Exception e) {
@@ -458,7 +513,7 @@ public class DefaultEndpoint implements RedisChannelWriter, Endpoint {
             List<RedisCommand<?, ?, ?>> commands = sharedLock.doExclusive(() -> {
 
                 if (queue.isEmpty()) {
-                    return Collections.<RedisCommand<?, ?, ?>> emptyList();
+                    return Collections.emptyList();
                 }
 
                 return drainCommands(queue);
@@ -576,7 +631,8 @@ public class DefaultEndpoint implements RedisChannelWriter, Endpoint {
         } else if (reliability == Reliability.AT_MOST_ONCE && rejectCommandsWhileDisconnected) {
 
             RedisException disconnected = new RedisException("Connection disconnected");
-            cancelCommands(disconnected.getMessage(), queuedCommands.drainQueue(), it -> it.completeExceptionally(disconnected));
+            cancelCommands(disconnected.getMessage(), queuedCommands.drainQueue(),
+                    it -> it.completeExceptionally(disconnected));
             cancelCommands(disconnected.getMessage(), drainCommands(), it -> it.completeExceptionally(disconnected));
             return;
         }
@@ -657,7 +713,7 @@ public class DefaultEndpoint implements RedisChannelWriter, Endpoint {
         RedisCommand<?, ?, ?> cmd;
         while ((cmd = source.poll()) != null) {
 
-            if (!cmd.isDone()) {
+            if (!cmd.isDone() && !ActivationCommand.isActivationCommand(cmd)) {
                 target.add(cmd);
             }
         }
@@ -719,7 +775,9 @@ public class DefaultEndpoint implements RedisChannelWriter, Endpoint {
     static class ListenerSupport {
 
         Collection<? extends RedisCommand<?, ?, ?>> sentCommands;
+
         RedisCommand<?, ?, ?> sentCommand;
+
         DefaultEndpoint endpoint;
 
         void dequeue() {
@@ -741,15 +799,18 @@ public class DefaultEndpoint implements RedisChannelWriter, Endpoint {
                 }
             }
         }
+
     }
 
     static class AtMostOnceWriteListener extends ListenerSupport implements ChannelFutureListener {
 
         private static final Recycler<AtMostOnceWriteListener> RECYCLER = new Recycler<AtMostOnceWriteListener>() {
+
             @Override
             protected AtMostOnceWriteListener newObject(Handle<AtMostOnceWriteListener> handle) {
                 return new AtMostOnceWriteListener(handle);
             }
+
         };
 
         private final Recycler.Handle<AtMostOnceWriteListener> handle;
@@ -802,6 +863,7 @@ public class DefaultEndpoint implements RedisChannelWriter, Endpoint {
 
             handle.recycle(this);
         }
+
     }
 
     /**
@@ -810,10 +872,12 @@ public class DefaultEndpoint implements RedisChannelWriter, Endpoint {
     static class RetryListener extends ListenerSupport implements GenericFutureListener<Future<Void>> {
 
         private static final Recycler<RetryListener> RECYCLER = new Recycler<RetryListener>() {
+
             @Override
             protected RetryListener newObject(Handle<RetryListener> handle) {
                 return new RetryListener(handle);
             }
+
         };
 
         private final Recycler.Handle<RetryListener> handle;
@@ -958,10 +1022,36 @@ public class DefaultEndpoint implements RedisChannelWriter, Endpoint {
 
             handle.recycle(this);
         }
+
     }
 
     private enum Reliability {
         AT_MOST_ONCE, AT_LEAST_ONCE
+    }
+
+    static class ActivationCommand<K, V, T> extends CommandWrapper<K, V, T> {
+
+        public ActivationCommand(RedisCommand<K, V, T> command) {
+            super(command);
+        }
+
+        public static boolean isActivationCommand(RedisCommand<?, ?, ?> command) {
+
+            if (command instanceof ActivationCommand) {
+                return true;
+            }
+
+            while (command instanceof CommandWrapper) {
+                command = ((CommandWrapper<?, ?, ?>) command).getDelegate();
+
+                if (command instanceof ActivationCommand) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
     }
 
 }

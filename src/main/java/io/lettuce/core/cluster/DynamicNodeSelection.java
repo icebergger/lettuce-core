@@ -37,8 +37,11 @@ import io.lettuce.core.cluster.models.partitions.RedisClusterNode;
 class DynamicNodeSelection<API, CMD, K, V> extends AbstractNodeSelection<API, CMD, K, V> {
 
     private final ClusterDistributionChannelWriter writer;
+
     private final Predicate<RedisClusterNode> selector;
+
     private final ClusterConnectionProvider.Intent intent;
+
     private final Function<StatefulRedisConnection<K, V>, API> apiExtractor;
 
     public DynamicNodeSelection(ClusterDistributionChannelWriter writer, Predicate<RedisClusterNode> selector,
@@ -66,6 +69,7 @@ class DynamicNodeSelection<API, CMD, K, V> extends AbstractNodeSelection<API, CM
 
     @Override
     protected List<RedisClusterNode> nodes() {
-        return writer.getPartitions().getPartitions().stream().filter(selector).collect(Collectors.toList());
+        return writer.getPartitions().stream().filter(selector).collect(Collectors.toList());
     }
+
 }

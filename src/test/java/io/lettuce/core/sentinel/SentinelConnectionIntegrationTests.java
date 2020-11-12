@@ -47,8 +47,11 @@ import io.lettuce.test.settings.TestSettings;
 public class SentinelConnectionIntegrationTests extends TestSupport {
 
     private final RedisClient redisClient;
+
     private StatefulRedisSentinelConnection<String, String> connection;
+
     private RedisSentinelCommands<String, String> sentinel;
+
     private RedisSentinelAsyncCommands<String, String> sentinelAsync;
 
     @Inject
@@ -64,7 +67,8 @@ public class SentinelConnectionIntegrationTests extends TestSupport {
         this.sentinelAsync = this.connection.async();
     }
 
-    protected RedisSentinelCommands<String, String> getSyncConnection(StatefulRedisSentinelConnection<String, String> connection) {
+    protected RedisSentinelCommands<String, String> getSyncConnection(
+            StatefulRedisSentinelConnection<String, String> connection) {
         return connection.sync();
     }
 
@@ -155,8 +159,8 @@ public class SentinelConnectionIntegrationTests extends TestSupport {
 
     @Test
     void connectWithByteCodec() {
-        RedisSentinelCommands<byte[], byte[]> connection = redisClient.connectSentinel(new ByteArrayCodec(),
-                SentinelTestSettings.SENTINEL_URI).sync();
+        RedisSentinelCommands<byte[], byte[]> connection = redisClient
+                .connectSentinel(new ByteArrayCodec(), SentinelTestSettings.SENTINEL_URI).sync();
         assertThat(connection.master(SentinelTestSettings.MASTER_ID.getBytes())).isNotNull();
         connection.getStatefulConnection().close();
     }
@@ -205,4 +209,20 @@ public class SentinelConnectionIntegrationTests extends TestSupport {
 
         connection.close();
     }
+
+    @Test
+    void sentinelWithAuthentication() {
+
+        RedisURI redisURI = RedisURI.Builder.sentinel(TestSettings.host(), 26381, SentinelTestSettings.MASTER_ID, "foobared")
+                .withClientName("my-client").build();
+
+        redisClient.setOptions(ClientOptions.builder().pingBeforeActivateConnection(true).build());
+        StatefulRedisConnection<String, String> connection = redisClient.connect(redisURI);
+
+        connection.sync().quit();
+        assertThat(connection.sync().clientGetname()).isEqualTo(redisURI.getClientName());
+
+        connection.close();
+    }
+
 }

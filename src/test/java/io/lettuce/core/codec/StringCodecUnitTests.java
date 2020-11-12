@@ -24,14 +24,19 @@ import org.junit.jupiter.api.Test;
 
 import io.lettuce.core.protocol.LettuceCharsets;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
 
 /**
+ * Unit tests for {@link StringCodec}.
+ *
  * @author Mark Paluch
+ * @author Dimitris Mandalidis
  */
 class StringCodecUnitTests {
 
     private String teststring = "hello üäü~∑†®†ª€∂‚¶¢ Wørld";
+
     private String teststringPlain = "hello uufadsfasdfadssdfadfs";
 
     @Test
@@ -112,8 +117,20 @@ class StringCodecUnitTests {
     @Test
     void estimateSize() {
 
-        assertThat(new StringCodec(LettuceCharsets.UTF8).estimateSize(teststring)).isEqualTo((int) (teststring.length() * 1.1));
+        assertThat(new StringCodec(LettuceCharsets.UTF8).estimateSize(teststring))
+                .isEqualTo(ByteBufUtil.utf8MaxBytes(teststring));
         assertThat(new StringCodec(LettuceCharsets.ASCII).estimateSize(teststring)).isEqualTo(teststring.length());
         assertThat(new StringCodec(StandardCharsets.ISO_8859_1).estimateSize(teststring)).isEqualTo(teststring.length());
+    }
+
+    @Test
+    void sizeOf() {
+
+        assertThat(new StringCodec(StandardCharsets.UTF_8).sizeOf(teststring, false))
+            .isEqualTo(ByteBufUtil.utf8MaxBytes(teststring));
+        assertThat(new StringCodec(StandardCharsets.US_ASCII).sizeOf(teststring, false))
+            .isEqualTo(teststring.length());
+        assertThat(new StringCodec(StandardCharsets.ISO_8859_1).sizeOf(teststring, false))
+            .isEqualTo(teststring.length());
     }
 }

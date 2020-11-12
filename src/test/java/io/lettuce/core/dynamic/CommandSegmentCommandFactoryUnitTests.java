@@ -16,7 +16,7 @@
 package io.lettuce.core.dynamic;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.Assert.fail;
+import static org.assertj.core.api.Assertions.fail;
 
 import java.util.concurrent.Future;
 
@@ -203,6 +203,7 @@ class CommandSegmentCommandFactoryUnitTests {
 
         @Command("XYZ")
         boolean unknownCommand();
+
     }
 
     private static interface MethodsWithTimeout {
@@ -210,5 +211,7 @@ class CommandSegmentCommandFactoryUnitTests {
         Future<String> async(String key, Timeout timeout);
 
         String sync(String key, Timeout timeout);
+
     }
+
 }

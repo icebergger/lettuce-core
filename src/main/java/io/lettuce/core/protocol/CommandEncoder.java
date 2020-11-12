@@ -24,6 +24,7 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.EncoderException;
 import io.netty.handler.codec.MessageToByteEncoder;
+import io.netty.util.internal.PlatformDependent;
 import io.netty.util.internal.logging.InternalLogger;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 
@@ -37,10 +38,11 @@ public class CommandEncoder extends MessageToByteEncoder<Object> {
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(CommandEncoder.class);
 
     private final boolean traceEnabled = logger.isTraceEnabled();
+
     private final boolean debugEnabled = logger.isDebugEnabled();
 
     public CommandEncoder() {
-        this(true);
+        this(PlatformDependent.directBufferPreferred());
     }
 
     public CommandEncoder(boolean preferDirect) {
@@ -92,8 +94,7 @@ public class CommandEncoder extends MessageToByteEncoder<Object> {
         } catch (RuntimeException e) {
             out.resetWriterIndex();
             command.completeExceptionally(new EncoderException(
-                    "Cannot encode command. Please close the connection as the connection state may be out of sync.",
-                    e));
+                    "Cannot encode command. Please close the connection as the connection state may be out of sync.", e));
         }
 
         if (debugEnabled) {
@@ -109,4 +110,5 @@ public class CommandEncoder extends MessageToByteEncoder<Object> {
         buffer.append('[').append(ChannelLogDescriptor.logDescriptor(channel)).append(']');
         return buffer.toString();
     }
+
 }

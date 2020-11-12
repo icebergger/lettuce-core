@@ -67,14 +67,21 @@ import io.netty.util.internal.logging.InternalLoggerFactory;
 public abstract class AbstractRedisClient {
 
     protected static final PooledByteBufAllocator BUF_ALLOCATOR = PooledByteBufAllocator.DEFAULT;
+
     protected static final InternalLogger logger = InternalLoggerFactory.getInstance(RedisClient.class);
 
     protected final Map<Class<? extends EventLoopGroup>, EventLoopGroup> eventLoopGroups = new ConcurrentHashMap<>(2);
+
     protected final ConnectionEvents connectionEvents = new ConnectionEvents();
+
     protected final Set<Closeable> closeableResources = ConcurrentHashMap.newKeySet();
+
     protected final EventExecutorGroup genericWorkerPool;
+
     protected final HashedWheelTimer timer;
+
     protected final ChannelGroup channels;
+
     protected final ClientResources clientResources;
 
     protected volatile ClientOptions clientOptions = ClientOptions.builder().build();
@@ -82,13 +89,14 @@ public abstract class AbstractRedisClient {
     protected Duration timeout = RedisURI.DEFAULT_TIMEOUT_DURATION;
 
     private final boolean sharedResources;
+
     private final AtomicBoolean shutdown = new AtomicBoolean();
 
     /**
      * Create a new instance with client resources.
      *
-     * @param clientResources the client resources. If {@literal null}, the client will create a new dedicated instance of
-     *        client resources and keep track of them.
+     * @param clientResources the client resources. If {@code null}, the client will create a new dedicated instance of client
+     *        resources and keep track of them.
      */
     protected AbstractRedisClient(ClientResources clientResources) {
 
@@ -109,7 +117,7 @@ public abstract class AbstractRedisClient {
      * Set the default timeout for connections created by this client. The timeout applies to connection attempts and
      * non-blocking commands.
      *
-     * @param timeout default connection timeout, must not be {@literal null}.
+     * @param timeout default connection timeout, must not be {@code null}.
      * @since 5.0
      */
     public void setDefaultTimeout(Duration timeout) {
@@ -136,9 +144,9 @@ public abstract class AbstractRedisClient {
     /**
      * Populate connection builder with necessary resources.
      *
-     * @param socketAddressSupplier address supplier for initial connect and re-connect
-     * @param connectionBuilder connection builder to configure the connection
-     * @param redisURI URI of the Redis instance
+     * @param socketAddressSupplier address supplier for initial connect and re-connect.
+     * @param connectionBuilder connection builder to configure the connection.
+     * @param redisURI URI of the Redis instance.
      */
     protected void connectionBuilder(Mono<SocketAddress> socketAddressSupplier, ConnectionBuilder connectionBuilder,
             RedisURI redisURI) {
@@ -194,8 +202,8 @@ public abstract class AbstractRedisClient {
             Class<? extends EventLoopGroup> eventLoopGroupClass = NativeTransports.eventLoopGroupClass();
 
             if (!eventLoopGroups.containsKey(NativeTransports.eventLoopGroupClass())) {
-                eventLoopGroups
-                        .put(eventLoopGroupClass, clientResources.eventLoopGroupProvider().allocate(eventLoopGroupClass));
+                eventLoopGroups.put(eventLoopGroupClass,
+                        clientResources.eventLoopGroupProvider().allocate(eventLoopGroupClass));
             }
         }
 
@@ -268,7 +276,7 @@ public abstract class AbstractRedisClient {
     /**
      * Connect and initialize a channel from {@link ConnectionBuilder}.
      *
-     * @param connectionBuilder must not be {@literal null}.
+     * @param connectionBuilder must not be {@code null}.
      * @return the {@link ConnectionFuture} to synchronize the connection process.
      * @since 4.4
      */
@@ -294,8 +302,8 @@ public abstract class AbstractRedisClient {
                     initializeChannelAsync0(connectionBuilder, channelReadyFuture, redisAddress);
                 }, channelReadyFuture::completeExceptionally);
 
-        return new DefaultConnectionFuture<>(socketAddressFuture, channelReadyFuture.thenApply(channel -> (T) connectionBuilder
-                .connection()));
+        return new DefaultConnectionFuture<>(socketAddressFuture,
+                channelReadyFuture.thenApply(channel -> (T) connectionBuilder.connection()));
     }
 
     private void initializeChannelAsync0(ConnectionBuilder connectionBuilder, CompletableFuture<Channel> channelReadyFuture,
@@ -309,14 +317,27 @@ public abstract class AbstractRedisClient {
         redisBootstrap.handler(initializer);
 
         clientResources.nettyCustomizer().afterBootstrapInitialized(redisBootstrap);
-        CompletableFuture<Boolean> initFuture = initializer.channelInitialized();
+        CompletableFuture<Boolean> channelInitialized = initializer.channelInitialized();
         ChannelFuture connectFuture = redisBootstrap.connect(redisAddress);
+
+        ChannelPromise initFuture = connectFuture.channel().newPromise();
 
         channelReadyFuture.whenComplete((c, t) -> {
 
             if (t instanceof CancellationException) {
                 connectFuture.cancel(true);
-                initFuture.cancel(true);
+                channelInitialized.cancel(true);
+            }
+        });
+
+        initFuture.addListener((ChannelFuture it) -> {
+
+            if (!initFuture.isSuccess()) {
+                connectFuture.channel().close();
+
+                channelReadyFuture.completeExceptionally(it.cause());
+            } else {
+                channelReadyFuture.complete(it.channel());
             }
         });
 
@@ -326,18 +347,19 @@ public abstract class AbstractRedisClient {
 
                 logger.debug("Connecting to Redis at {}: {}", redisAddress, future.cause());
                 connectionBuilder.endpoint().initialState();
-                channelReadyFuture.completeExceptionally(future.cause());
+
+                initFuture.tryFailure(future.cause());
                 return;
             }
 
-            initFuture.whenComplete((success, throwable) -> {
+            channelInitialized.whenComplete((success, throwable) -> {
 
                 if (throwable == null) {
 
                     logger.debug("Connecting to Redis at {}: Success", redisAddress);
                     RedisChannelHandler<?, ?> connection = connectionBuilder.connection();
                     connection.registerCloseables(closeableResources, connection);
-                    channelReadyFuture.complete(connectFuture.channel());
+                    initFuture.trySuccess();
                     return;
                 }
 
@@ -348,43 +370,54 @@ public abstract class AbstractRedisClient {
                 if (throwable instanceof RedisConnectionException) {
                     failure = throwable;
                 } else if (throwable instanceof TimeoutException) {
-                    failure = new RedisConnectionException("Could not initialize channel within "
-                            + connectionBuilder.getTimeout(), throwable);
+                    failure = new RedisConnectionException(
+                            "Could not initialize channel within " + connectionBuilder.getTimeout(), throwable);
                 } else {
                     failure = throwable;
                 }
-                channelReadyFuture.completeExceptionally(failure);
+
+                initFuture.tryFailure(failure);
             });
         });
     }
 
     /**
-     * Shutdown this client and close all open connections. The client should be discarded after calling shutdown. The shutdown
-     * has no quiet time and a timeout of 2 seconds.
+     * Shutdown this client and close all open connections once this method is called. Once all connections are closed, the
+     * associated {@link ClientResources} are shut down/released gracefully considering quiet time and the shutdown timeout. The
+     * client should be discarded after calling shutdown. The shutdown is executed without quiet time and a timeout of 2
+     * {@link TimeUnit#SECONDS}.
+     *
+     * @see EventExecutorGroup#shutdownGracefully(long, long, TimeUnit)
      */
     public void shutdown() {
         shutdown(0, 2, TimeUnit.SECONDS);
     }
 
     /**
-     * Shutdown this client and close all open connections. The client should be discarded after calling shutdown.
+     * Shutdown this client and close all open connections once this method is called. Once all connections are closed, the
+     * associated {@link ClientResources} are shut down/released gracefully considering quiet time and the shutdown timeout. The
+     * client should be discarded after calling shutdown.
      *
-     * @param quietPeriod the quiet period as described in the documentation
-     * @param timeout the maximum amount of time to wait until the executor is shutdown regardless if a task was submitted
-     *        during the quiet period
+     * @param quietPeriod the quiet period to allow the executor gracefully shut down.
+     * @param timeout the maximum amount of time to wait until the backing executor is shutdown regardless if a task was
+     *        submitted during the quiet period.
      * @since 5.0
+     * @see EventExecutorGroup#shutdownGracefully(long, long, TimeUnit)
      */
     public void shutdown(Duration quietPeriod, Duration timeout) {
         shutdown(quietPeriod.toNanos(), timeout.toNanos(), TimeUnit.NANOSECONDS);
     }
 
     /**
-     * Shutdown this client and close all open connections. The client should be discarded after calling shutdown.
+     * Shutdown this client and close all open connections once this method is called. Once all connections are closed, the
+     * associated {@link ClientResources} are shut down/released gracefully considering quiet time and the shutdown timeout. The
+     * client should be discarded after calling shutdown.
      *
-     * @param quietPeriod the quiet period as described in the documentation
-     * @param timeout the maximum amount of time to wait until the executor is shutdown regardless if a task was submitted
-     *        during the quiet period
-     * @param timeUnit the unit of {@code quietPeriod} and {@code timeout}
+     * @param quietPeriod the quiet period to allow the executor gracefully shut down.
+     * @param timeout the maximum amount of time to wait until the backing executor is shutdown regardless if a task was
+     *        submitted during the quiet period.
+     * @param timeUnit the unit of {@code quietPeriod} and {@code timeout}.
+     * @see EventExecutorGroup#shutdownGracefully(long, long, TimeUnit)
      */
     public void shutdown(long quietPeriod, long timeout, TimeUnit timeUnit) {
 
@@ -409,24 +442,29 @@ public abstract class AbstractRedisClient {
     }
 
     /**
-     * Shutdown this client and close all open connections asynchronously. The client should be discarded after calling
-     * shutdown. The shutdown has 2 secs quiet time and a timeout of 15 secs.
+     * Shutdown this client and close all open connections asynchronously. Once all connections are closed, the associated
+     * {@link ClientResources} are shut down/released gracefully considering quiet time and the shutdown timeout. The client
+     * should be discarded after calling shutdown. The shutdown has 2 {@link TimeUnit#SECONDS} quiet time and a timeout of 15
+     * {@link TimeUnit#SECONDS}.
      *
      * @since 4.4
+     * @see EventExecutorGroup#shutdownGracefully(long, long, TimeUnit)
      */
     public CompletableFuture<Void> shutdownAsync() {
         return shutdownAsync(2, 15, TimeUnit.SECONDS);
     }
 
     /**
-     * Shutdown this client and close all open connections asynchronously. The client should be discarded after calling
-     * shutdown.
+     * Shutdown this client and close all open connections asynchronously. Once all connections are closed, the associated
+     * {@link ClientResources} are shut down/released gracefully considering quiet time and the shutdown timeout. The client
+     * should be discarded after calling shutdown.
      *
-     * @param quietPeriod the quiet period as described in the documentation
-     * @param timeout the maximum amount of time to wait until the executor is shutdown regardless if a task was submitted
-     *        during the quiet period
-     * @param timeUnit the unit of {@code quietPeriod} and {@code timeout}
+     * @param quietPeriod the quiet period to allow the executor gracefully shut down.
+     * @param timeout the maximum amount of time to wait until the backing executor is shutdown regardless if a task was
+     *        submitted during the quiet period.
+     * @param timeUnit the unit of {@code quietPeriod} and {@code timeout}.
      * @since 4.4
+     * @see EventExecutorGroup#shutdownGracefully(long, long, TimeUnit)
      */
     @SuppressWarnings("rawtypes")
     public CompletableFuture<Void> shutdownAsync(long quietPeriod, long timeout, TimeUnit timeUnit) {
@@ -508,7 +546,7 @@ public abstract class AbstractRedisClient {
      * connection, the listener will be notified. The corresponding netty channel handler (async connection) is passed on the
      * event.
      *
-     * @param listener must not be {@literal null}
+     * @param listener must not be {@code null}.
      */
     public void addListener(RedisConnectionStateListener listener) {
         LettuceAssert.notNull(listener, "RedisConnectionStateListener must not be null");
@@ -518,7 +556,7 @@ public abstract class AbstractRedisClient {
     /**
      * Removes a listener.
      *
-     * @param listener must not be {@literal null}
+     * @param listener must not be {@code null}.
      */
     public void removeListener(RedisConnectionStateListener listener) {
 
@@ -530,7 +568,7 @@ public abstract class AbstractRedisClient {
      * Returns the {@link ClientOptions} which are valid for that client. Connections inherit the current options at the moment
      * the connection is created. Changes to options will not affect existing connections.
      *
-     * @return the {@link ClientOptions} for this client
+     * @return the {@link ClientOptions} for this client.
      */
     public ClientOptions getOptions() {
         return clientOptions;
@@ -539,7 +577,7 @@ public abstract class AbstractRedisClient {
     /**
      * Set the {@link ClientOptions} for the client.
      *
-     * @param clientOptions client options for the client and connections that are created after setting the options
+     * @param clientOptions client options for the client and connections that are created after setting the options.
      */
     protected void setOptions(ClientOptions clientOptions) {
         LettuceAssert.notNull(clientOptions, "ClientOptions must not be null");
@@ -569,4 +607,5 @@ public abstract class AbstractRedisClient {
 
         return promise;
     }
+
 }

@@ -15,12 +15,8 @@
  */
 package io.lettuce.core.resource;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 import java.util.concurrent.TimeUnit;
 
@@ -40,6 +36,8 @@ import io.netty.util.concurrent.EventExecutorGroup;
 import io.netty.util.concurrent.Future;
 
 /**
+ * Unit tests for {@link DefaultClientResources}.
+ *
  * @author Mark Paluch
  */
 class DefaultClientResourcesUnitTests {
@@ -49,8 +47,12 @@ class DefaultClientResourcesUnitTests {
 
         DefaultClientResources sut = DefaultClientResources.create();
 
-        assertThat(sut.commandLatencyCollector()).isNotNull();
-        assertThat(sut.commandLatencyCollector().isEnabled()).isTrue();
+        assertThat(sut.commandLatencyRecorder()).isNotNull();
+        assertThat(sut.commandLatencyRecorder().isEnabled()).isTrue();
+
+        HashedWheelTimer timer = (HashedWheelTimer) sut.timer();
+
+        assertThat(timer).hasFieldOrPropertyWithValue("workerState", 1);
 
         EventExecutorGroup eventExecutors = sut.eventExecutorGroup();
         NioEventLoopGroup eventLoopGroup = sut.eventLoopGroupProvider().allocate(NioEventLoopGroup.class);
@@ -66,7 +68,7 @@ class DefaultClientResourcesUnitTests {
         Future<Boolean> shutdown = sut.eventLoopGroupProvider().shutdown(0, 0, TimeUnit.SECONDS);
         assertThat(shutdown.get()).isTrue();
 
-        assertThat(sut.commandLatencyCollector().isEnabled()).isFalse();
+        assertThat(sut.commandLatencyRecorder().isEnabled()).isFalse();
     }
 
     @Test
@@ -81,8 +83,8 @@ class DefaultClientResourcesUnitTests {
         assertThat(eventExecutors).hasSize(4);
         assertThat(eventLoopGroup.executorCount()).isEqualTo(4);
         assertThat(sut.ioThreadPoolSize()).isEqualTo(4);
-        assertThat(sut.commandLatencyCollector()).isNotNull();
-        assertThat(sut.commandLatencyCollector().isEnabled()).isFalse();
+        assertThat(sut.commandLatencyRecorder()).isNotNull();
+        assertThat(sut.commandLatencyRecorder().isEnabled()).isFalse();
 
         assertThat(sut.shutdown(0, 0, TimeUnit.MILLISECONDS).get()).isTrue();
     }
@@ -109,7 +111,7 @@ class DefaultClientResourcesUnitTests {
 
         DefaultClientResources sut = DefaultClientResources.builder().eventExecutorGroup(executorMock)
                 .eventLoopGroupProvider(groupProviderMock).timer(timerMock).eventBus(eventBusMock)
-                .commandLatencyCollector(latencyCollectorMock).nettyCustomizer(nettyCustomizer).build();
+                .commandLatencyRecorder(latencyCollectorMock).nettyCustomizer(nettyCustomizer).build();
 
         assertThat(sut.eventExecutorGroup()).isSameAs(executorMock);
         assertThat(sut.eventLoopGroupProvider()).isSameAs(groupProviderMock);
@@ -136,14 +138,16 @@ class DefaultClientResourcesUnitTests {
         EventBus eventBusMock = mock(EventBus.class);
         CommandLatencyCollector latencyCollectorMock = mock(CommandLatencyCollector.class);
 
+
         ClientResources sut = ClientResources.builder().eventExecutorGroup(executorMock)
                 .eventLoopGroupProvider(groupProviderMock).timer(timerMock).eventBus(eventBusMock)
-                .commandLatencyCollector(latencyCollectorMock).build();
+                .commandLatencyRecorder(latencyCollectorMock).build();
 
         ClientResources copy = sut.mutate().timer(timerMock2).build();
 
         assertThat(sut.eventExecutorGroup()).isSameAs(executorMock);
         assertThat(sut.eventLoopGroupProvider()).isSameAs(groupProviderMock);
+
         assertThat(sut.timer()).isSameAs(timerMock);
         assertThat(copy.timer()).isSameAs(timerMock2).isNotSameAs(timerMock);
         assertThat(sut.eventBus()).isSameAs(eventBusMock);
@@ -222,7 +226,7 @@ class DefaultClientResourcesUnitTests {
         ClientResources clientResources = ClientResources.create();
         HashedWheelTimer timer = (HashedWheelTimer) clientResources.timer();
 
-        assertThat(timer).hasFieldOrPropertyWithValue("workerState", 0);
+        assertThat(timer).hasFieldOrPropertyWithValue("workerState", 1);
 
         ClientResources copy = clientResources.mutate().build();
         assertThat(copy.timer()).isSameAs(timer);
@@ -238,7 +242,7 @@ class DefaultClientResourcesUnitTests {
         ClientResources clientResources = ClientResources.create();
         HashedWheelTimer timer = (HashedWheelTimer) clientResources.timer();
 
-        assertThat(timer).hasFieldOrPropertyWithValue("workerState", 0);
+        assertThat(timer).hasFieldOrPropertyWithValue("workerState", 1);
 
         ClientResources copy = clientResources.mutate().timer(new HashedWheelTimer()).build();
         HashedWheelTimer copyTimer = (HashedWheelTimer) copy.timer();
@@ -246,7 +250,7 @@ class DefaultClientResourcesUnitTests {
 
         copy.shutdown().awaitUninterruptibly();
 
-        assertThat(timer).hasFieldOrPropertyWithValue("workerState", 0);
+        assertThat(timer).hasFieldOrPropertyWithValue("workerState", 1);
         assertThat(copyTimer).hasFieldOrPropertyWithValue("workerState", 0);
 
         copyTimer.stop();

@@ -27,6 +27,7 @@ import java.time.Duration;
 import java.util.*;
 import java.util.function.LongFunction;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import io.lettuce.core.internal.HostAndPort;
 import io.lettuce.core.internal.LettuceAssert;
@@ -241,7 +242,7 @@ public class RedisURI implements Serializable, ConnectionPoint {
     }
 
     /**
-     * Returns a new {@link RedisURI.Builder} to construct a {@link RedisURI}.
+     * Return a new {@link RedisURI.Builder} to construct a {@link RedisURI}.
      *
      * @return a new {@link RedisURI.Builder} to construct a {@link RedisURI}.
      */
@@ -283,6 +284,37 @@ public class RedisURI implements Serializable, ConnectionPoint {
      */
     public static RedisURI create(URI uri) {
         return buildRedisUriFromUri(uri);
+    }
+
+    /**
+     * Create a new {@link RedisURI.Builder} that is initialized from a plain {@link RedisURI}.
+     *
+     * @param source the initialization source, must not be {@code null}.
+     * @return the initialized builder.
+     * @since 6.0
+     */
+    public static Builder builder(RedisURI source) {
+
+        LettuceAssert.notNull(source, "Source RedisURI must not be null");
+
+        Builder builder = builder();
+        builder.withSsl(source).withAuthentication(source).withTimeout(source.getTimeout()).withDatabase(source.getDatabase());
+
+        if (source.getClientName() != null) {
+            builder.withClientName(source.getClientName());
+        }
+
+        if (source.socket != null) {
+            builder.socket = source.getSocket();
+        } else {
+
+            if (source.getHost() != null) {
+                builder.withHost(source.getHost());
+                builder.withPort(source.getPort());
+            }
+        }
+
+        return builder;
     }
 
     /**
@@ -358,6 +390,23 @@ public class RedisURI implements Serializable, ConnectionPoint {
     }
 
     /**
+     * Apply authentication from another {@link RedisURI}. The authentication settings of the {@code source} URI will be applied
+     * to this URI. That is in particular username and password. If the source has authentication credentials configured, then
+     * this URI will use the same credentials. If this URI has authentication configured and the {@code source} URI has no
+     * authentication, then this URI's authentication credentials will be reset.
+     *
+     * @param source must not be {@code null}.
+     * @since 6.0
+     */
+    public void applyAuthentication(RedisURI source) {
+
+        LettuceAssert.notNull(source, "Source RedisURI must not be null");
+
+        setUsername(source.getUsername());
+        setPassword(source.getPassword());
+    }
+
+    /**
      * Returns the username.
      *
      * @return the username
@@ -412,13 +461,12 @@ public class RedisURI implements Serializable, ConnectionPoint {
     /**
      * Sets the password. Use empty char array to skip authentication.
      *
-     * @param password the password, must not be {@code null}.
+     * @param password the password, can be {@code null}.
      * @since 4.4
      */
     public void setPassword(char[] password) {
 
-        LettuceAssert.notNull(password, "Password must not be null");
-        this.password = Arrays.copyOf(password, password.length);
+        this.password = password == null ? null : Arrays.copyOf(password, password.length);
     }
 
     /**
@@ -484,6 +532,22 @@ public class RedisURI implements Serializable, ConnectionPoint {
      */
     public void setClientName(String clientName) {
         this.clientName = clientName;
+    }
+
+    /**
+     * Apply authentication from another {@link RedisURI}. The SSL settings of the {@code source} URI will be applied to this
+     * URI. That is in particular SSL usage, peer verification and StartTLS.
+     *
+     * @param source must not be {@code null}.
+     * @since 6.0
+     */
+    public void applySsl(RedisURI source) {
+
+        LettuceAssert.notNull(source, "Source RedisURI must not be null");
+
+        setSsl(source.isSsl());
+        setVerifyPeer(source.isVerifyPeer());
+        setStartTls(source.isStartTls());
     }
 
     /**
@@ -563,15 +627,15 @@ public class RedisURI implements Serializable, ConnectionPoint {
      */
     public URI toURI() {
         try {
-            return URI.create(createUriString());
+            return URI.create(createUriString(false));
         } catch (Exception e) {
             throw new IllegalStateException("Cannot render URI for " + toString(), e);
         }
     }
 
-    private String createUriString() {
+    private String createUriString(boolean maskCredentials) {
         String scheme = getScheme();
-        String authority = getAuthority(scheme);
+        String authority = getAuthority(scheme, maskCredentials);
         String queryString = getQueryString();
         String uri = scheme + "://" + authority;
 
@@ -660,7 +724,7 @@ public class RedisURI implements Serializable, ConnectionPoint {
         return builder.build();
     }
 
-    private String getAuthority(String scheme) {
+    private String getAuthority(String scheme, boolean maskCredentials) {
 
         String authority = null;
 
@@ -692,7 +756,10 @@ public class RedisURI implements Serializable, ConnectionPoint {
         }
 
         if (password != null && password.length != 0) {
-            authority = urlEncode(new String(password)) + "@" + authority;
+            authority = urlEncode(
+                    maskCredentials ? IntStream.range(0, password.length).mapToObj(ignore -> "*").collect(Collectors.joining())
+                            : new String(password))
+                    + "@" + authority;
         }
         if (username != null) {
             authority = urlEncode(username) + ":" + authority;
@@ -785,7 +852,7 @@ public class RedisURI implements Serializable, ConnectionPoint {
      */
     @Override
     public String toString() {
-        return createUriString();
+        return createUriString(true);
     }
 
     @Override
@@ -1003,6 +1070,7 @@ public class RedisURI implements Serializable, ConnectionPoint {
         return URI_SCHEME_REDIS_SENTINEL.equals(scheme) || URI_SCHEME_REDIS_SENTINEL_SECURE.equals(scheme);
     }
 
+
     /**
      * Builder for Redis URI.
      */
@@ -1141,7 +1209,10 @@ public class RedisURI implements Serializable, ConnectionPoint {
          * @param masterId sentinel master id
          * @param password the Sentinel password (supported since Redis 5.0.1)
          * @return new builder with Sentinel host/port.
+         * @deprecated since 6.0, use {@link #sentinel(String, int, String)} and
+         *             {@link #withAuthentication(String, CharSequence)} instead.
          */
+        @Deprecated
         public static Builder sentinel(String host, int port, String masterId, CharSequence password) {
 
             LettuceAssert.notEmpty(host, "Host must not be empty");
@@ -1198,7 +1269,7 @@ public class RedisURI implements Serializable, ConnectionPoint {
             RedisURI redisURI = RedisURI.create(host, port);
 
             if (password != null) {
-                redisURI.setPassword(password.toString());
+                redisURI.setPassword(password);
             }
 
             return withSentinel(redisURI);
@@ -1246,6 +1317,25 @@ public class RedisURI implements Serializable, ConnectionPoint {
             LettuceAssert.isTrue(isValidPort(port), () -> String.format("Port out of range: %s", port));
 
             this.port = port;
+            return this;
+        }
+
+        /**
+         * Apply authentication from another {@link RedisURI}. The SSL settings of the {@code source} URI will be applied to
+         * this URI. That is in particular SSL usage, peer verification and StartTLS.
+         *
+         * @param source must not be {@code null}.
+         * @since 6.0
+         * @return the builder
+         */
+        public Builder withSsl(RedisURI source) {
+
+            LettuceAssert.notNull(source, "Source RedisURI must not be null");
+
+            withSsl(source.isSsl());
+            withVerifyPeer(source.isVerifyPeer());
+            withStartTls(source.isStartTls());
+
             return this;
         }
 
@@ -1322,8 +1412,43 @@ public class RedisURI implements Serializable, ConnectionPoint {
          * @param username the user name
          * @param password the password name
          * @return the builder
+         * @since 6.0
          */
         public Builder withAuthentication(String username, CharSequence password) {
+
+            LettuceAssert.notNull(username, "User name must not be null");
+            LettuceAssert.notNull(password, "Password must not be null");
+
+            this.username = username;
+            return withPassword(password);
+        }
+
+        /**
+         * Apply authentication from another {@link RedisURI}. The authentication settings of the {@code source} URI will be
+         * applied to this builder.
+         *
+         * @param source must not be {@code null}.
+         * @since 6.0
+         */
+        public Builder withAuthentication(RedisURI source) {
+
+            LettuceAssert.notNull(source, "Source RedisURI must not be null");
+
+            this.username = source.getUsername();
+            withPassword(source.getPassword());
+
+            return this;
+        }
+
+        /**
+         * Configures authentication.
+         *
+         * @param username the user name
+         * @param password the password name
+         * @return the builder
+         * @since 6.0
+         */
+        public Builder withAuthentication(String username, char[] password) {
 
             LettuceAssert.notNull(username, "User name must not be null");
             LettuceAssert.notNull(password, "Password must not be null");
@@ -1375,9 +1500,7 @@ public class RedisURI implements Serializable, ConnectionPoint {
          */
         public Builder withPassword(char[] password) {
 
-            LettuceAssert.notNull(password, "Password must not be null");
-
-            this.password = Arrays.copyOf(password, password.length);
+            this.password = password == null ? null : Arrays.copyOf(password, password.length);
             return this;
         }
 

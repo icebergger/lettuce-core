@@ -23,6 +23,8 @@ import io.lettuce.core.Limit;
 import io.lettuce.core.Range;
 import io.lettuce.core.StreamMessage;
 import io.lettuce.core.XAddArgs;
+import io.lettuce.core.XGroupCreateArgs;
+import io.lettuce.core.XReadArgs;
 import io.lettuce.core.XClaimArgs;
 import io.lettuce.core.XReadArgs.StreamOffset;
 import io.lettuce.core.models.stream.PendingMessage;

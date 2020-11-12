@@ -30,11 +30,19 @@ import io.lettuce.core.cluster.api.async.RedisClusterAsyncCommands;
 import io.lettuce.core.codec.Base16;
 import io.lettuce.core.codec.RedisCodec;
 import io.lettuce.core.internal.LettuceAssert;
-import io.lettuce.core.internal.LettuceStrings;
 import io.lettuce.core.models.stream.PendingMessage;
 import io.lettuce.core.models.stream.PendingMessages;
-import io.lettuce.core.output.*;
-import io.lettuce.core.protocol.*;
+import io.lettuce.core.output.CommandOutput;
+import io.lettuce.core.output.KeyStreamingChannel;
+import io.lettuce.core.output.KeyValueStreamingChannel;
+import io.lettuce.core.output.ScoredValueStreamingChannel;
+import io.lettuce.core.output.ValueStreamingChannel;
+import io.lettuce.core.protocol.AsyncCommand;
+import io.lettuce.core.protocol.Command;
+import io.lettuce.core.protocol.CommandArgs;
+import io.lettuce.core.protocol.CommandType;
+import io.lettuce.core.protocol.ProtocolKeyword;
+import io.lettuce.core.protocol.RedisCommand;
 
 /**
  * An asynchronous and thread-safe API for a Redis connection.
@@ -44,6 +52,7 @@ import io.lettuce.core.protocol.*;
  * @author Will Glozer
  * @author Mark Paluch
  * @author Tugdual Grall
+ * @author dengliming
  */
 @SuppressWarnings("unchecked")
 public abstract class AbstractRedisAsyncCommands<K, V> implements RedisHashAsyncCommands<K, V>, RedisKeyAsyncCommands<K, V>,
@@ -161,6 +170,11 @@ public abstract class AbstractRedisAsyncCommands<K, V> implements RedisHashAsync
     @Override
     public RedisFuture<Long> bitpos(K key, boolean state, long start, long end) {
         return dispatch(commandBuilder.bitpos(key, state, start, end));
+    }
+
+    @Override
+    public RedisFuture<V> blmove(K source, K destination, LMoveArgs args, long timeout) {
+        return dispatch(commandBuilder.blmove(source, destination, args, timeout));
     }
 
     @Override
@@ -909,6 +923,11 @@ public abstract class AbstractRedisAsyncCommands<K, V> implements RedisHashAsync
     }
 
     @Override
+    public RedisFuture<V> lmove(K source, K destination, LMoveArgs args) {
+        return dispatch(commandBuilder.lmove(source, destination, args));
+    }
+
+    @Override
     public RedisFuture<V> lpop(K key) {
         return dispatch(commandBuilder.lpop(key));
     }
@@ -1385,6 +1404,11 @@ public abstract class AbstractRedisAsyncCommands<K, V> implements RedisHashAsync
     }
 
     @Override
+    public RedisFuture<List<Boolean>> smismember(K key, V... members) {
+        return dispatch(commandBuilder.smismember(key, members));
+    }
+
+    @Override
     public RedisFuture<Boolean> smove(K source, K destination, V member) {
         return dispatch(commandBuilder.smove(source, destination, member));
     }
@@ -1789,13 +1813,33 @@ public abstract class AbstractRedisAsyncCommands<K, V> implements RedisHashAsync
     }
 
     @Override
+    public RedisFuture<List<V>> zinter(K... keys) {
+        return dispatch(commandBuilder.zinter(keys));
+    }
+
+    @Override
+    public RedisFuture<List<V>> zinter(ZAggregateArgs aggregateArgs, K... keys) {
+        return dispatch(commandBuilder.zinter(aggregateArgs, keys));
+    }
+
+    @Override
+    public RedisFuture<List<ScoredValue<V>>> zinterWithScores(K... keys) {
+        return dispatch(commandBuilder.zinterWithScores(keys));
+    }
+
+    @Override
+    public RedisFuture<List<ScoredValue<V>>> zinterWithScores(ZAggregateArgs aggregateArgs, K... keys) {
+        return dispatch(commandBuilder.zinterWithScores(aggregateArgs, keys));
+    }
+
+    @Override
     public RedisFuture<Long> zinterstore(K destination, K... keys) {
         return dispatch(commandBuilder.zinterstore(destination, keys));
     }
 
     @Override
-    public RedisFuture<Long> zinterstore(K destination, ZStoreArgs storeArgs, K... keys) {
-        return dispatch(commandBuilder.zinterstore(destination, storeArgs, keys));
+    public RedisFuture<Long> zinterstore(K destination, ZStoreArgs zStoreArgs, K... keys) {
+        return dispatch(commandBuilder.zinterstore(destination, zStoreArgs, keys));
     }
 
     @Override
@@ -1806,6 +1850,11 @@ public abstract class AbstractRedisAsyncCommands<K, V> implements RedisHashAsync
     @Override
     public RedisFuture<Long> zlexcount(K key, Range<? extends V> range) {
         return dispatch(commandBuilder.zlexcount(key, range));
+    }
+
+    @Override
+    public RedisFuture<List<Double>> zmscore(K key, V... members) {
+        return dispatch(commandBuilder.zmscore(key, members));
     }
 
     @Override
@@ -2246,13 +2295,33 @@ public abstract class AbstractRedisAsyncCommands<K, V> implements RedisHashAsync
     }
 
     @Override
+    public RedisFuture<List<V>> zunion(K... keys) {
+        return dispatch(commandBuilder.zunion(keys));
+    }
+
+    @Override
+    public RedisFuture<List<V>> zunion(ZAggregateArgs aggregateArgs, K... keys) {
+        return dispatch(commandBuilder.zunion(aggregateArgs, keys));
+    }
+
+    @Override
+    public RedisFuture<List<ScoredValue<V>>> zunionWithScores(K... keys) {
+        return dispatch(commandBuilder.zunionWithScores(keys));
+    }
+
+    @Override
+    public RedisFuture<List<ScoredValue<V>>> zunionWithScores(ZAggregateArgs aggregateArgs, K... keys) {
+        return dispatch(commandBuilder.zunionWithScores(aggregateArgs, keys));
+    }
+
+    @Override
     public RedisFuture<Long> zunionstore(K destination, K... keys) {
         return dispatch(commandBuilder.zunionstore(destination, keys));
     }
 
     @Override
-    public RedisFuture<Long> zunionstore(K destination, ZStoreArgs storeArgs, K... keys) {
-        return dispatch(commandBuilder.zunionstore(destination, storeArgs, keys));
+    public RedisFuture<Long> zunionstore(K destination, ZStoreArgs zStoreArgs, K... keys) {
+        return dispatch(commandBuilder.zunionstore(destination, zStoreArgs, keys));
     }
 
     private byte[] encodeScript(String script) {

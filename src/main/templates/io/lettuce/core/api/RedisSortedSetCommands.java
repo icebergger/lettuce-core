@@ -209,6 +209,44 @@ public interface RedisSortedSetCommands<K, V> {
     Double zincrby(K key, double amount, V member);
 
     /**
+     * Intersect multiple sorted sets and returns the resulting sorted.
+     *
+     * @param keys the keys.
+     * @return List&lt;V&gt; array-reply list of elements.
+     * @since 6.1
+     */
+    List<V> zinter(K... keys);
+
+    /**
+     * Intersect multiple sorted sets and returns the resulting sorted.
+     *
+     * @param aggregateArgs arguments to define aggregation and weights.
+     * @param keys the keys.
+     * @return List&lt;V&gt; array-reply list of elements.
+     * @since 6.1
+     */
+    List<V> zinter(ZAggregateArgs aggregateArgs, K... keys);
+
+    /**
+     * Intersect multiple sorted sets and returns the resulting sorted.
+     *
+     * @param aggregateArgs arguments to define aggregation and weights.
+     * @param keys the keys.
+     * @return List&lt;V&gt; array-reply list of scored values.
+     * @since 6.1
+     */
+    List<ScoredValue<V>> zinterWithScores(ZAggregateArgs aggregateArgs, K... keys);
+
+    /**
+     * Intersect multiple sorted sets and returns the resulting sorted.
+     *
+     * @param keys the keys.
+     * @return List&lt;V&gt; array-reply list of scored values.
+     * @since 6.1
+     */
+    List<ScoredValue<V>> zinterWithScores(K... keys);
+
+    /**
      * Intersect multiple sorted sets and store the resulting sorted set in a new key.
      *
      * @param destination the destination.
@@ -221,7 +259,7 @@ public interface RedisSortedSetCommands<K, V> {
      * Intersect multiple sorted sets and store the resulting sorted set in a new key.
      *
      * @param destination the destination.
-     * @param storeArgs the storeArgs.
+     * @param storeArgs arguments to define aggregation and weights.
      * @param keys the keys.
      * @return Long integer-reply the number of elements in the resulting sorted set at {@code destination}.
      */
@@ -248,6 +286,16 @@ public interface RedisSortedSetCommands<K, V> {
      * @since 4.3
      */
     Long zlexcount(K key, Range<? extends V> range);
+
+    /**
+     * Returns the scores associated with the specified members in the sorted set stored at key.
+     *
+     * @param key the key.
+     * @param members the member type: value.
+     * @return List&lt;Double&gt; array-reply list of scores or nil associated with the specified member values.
+     * @since 6.1
+     */
+    List<Double> zmscore(K key, V... members);
 
     /**
      * Removes and returns up to count members with the lowest scores in the sorted set stored at key.
@@ -1234,6 +1282,44 @@ public interface RedisSortedSetCommands<K, V> {
     Double zscore(K key, V member);
 
     /**
+     * Add multiple sorted sets and returns the resulting sorted set.
+     *
+     * @param keys the keys.
+     * @return List&lt;V&gt; array-reply list of elements.
+     * @since 6.1
+     */
+    List<V> zunion(K... keys);
+
+    /**
+     * Add multiple sorted sets and returns the resulting sorted set.
+     *
+     * @param aggregateArgs arguments to define aggregation and weights.
+     * @param keys the keys.
+     * @return List&lt;V&gt; array-reply list of elements.
+     * @since 6.1
+     */
+    List<V> zunion(ZAggregateArgs aggregateArgs, K... keys);
+
+    /**
+     * Add multiple sorted sets and returns the resulting sorted set.
+     *
+     * @param aggregateArgs arguments to define aggregation and weights.
+     * @param keys the keys.
+     * @return List&lt;V&gt; array-reply list of scored values.
+     * @since 6.1
+     */
+    List<ScoredValue<V>> zunionWithScores(ZAggregateArgs aggregateArgs, K... keys);
+
+    /**
+     * Add multiple sorted sets and returns the resulting sorted set.
+     *
+     * @param keys the keys.
+     * @return List&lt;V&gt; array-reply list of scored values.
+     * @since 6.1
+     */
+    List<ScoredValue<V>> zunionWithScores(K... keys);
+
+    /**
      * Add multiple sorted sets and store the resulting sorted set in a new key.
      *
      * @param destination destination key.
@@ -1246,7 +1332,7 @@ public interface RedisSortedSetCommands<K, V> {
      * Add multiple sorted sets and store the resulting sorted set in a new key.
      *
      * @param destination the destination.
-     * @param storeArgs the storeArgs.
+     * @param storeArgs arguments to define aggregation and weights.
      * @param keys the keys.
      * @return Long integer-reply the number of elements in the resulting sorted set at {@code destination}.
      */

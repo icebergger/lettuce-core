@@ -15,12 +15,16 @@
  */
 package io.lettuce.core;
 
-import static io.lettuce.core.internal.LettuceStrings.string;
+import static io.lettuce.core.internal.LettuceStrings.*;
 import static io.lettuce.core.protocol.CommandKeyword.*;
 import static io.lettuce.core.protocol.CommandType.*;
 
 import java.nio.ByteBuffer;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import io.lettuce.core.Range.Boundary;
 import io.lettuce.core.XReadArgs.StreamOffset;
@@ -30,7 +34,11 @@ import io.lettuce.core.internal.LettuceAssert;
 import io.lettuce.core.models.stream.PendingMessage;
 import io.lettuce.core.models.stream.PendingMessages;
 import io.lettuce.core.output.*;
-import io.lettuce.core.protocol.*;
+import io.lettuce.core.protocol.BaseRedisCommandBuilder;
+import io.lettuce.core.protocol.Command;
+import io.lettuce.core.protocol.CommandArgs;
+import io.lettuce.core.protocol.CommandType;
+import io.lettuce.core.protocol.RedisCommand;
 
 /**
  * @param <K>
@@ -38,6 +46,8 @@ import io.lettuce.core.protocol.*;
  * @author Mark Paluch
  * @author Zhang Jessey
  * @author Tugdual Grall
+ * @author dengliming
+ * @author Mikhael Sokolov
  */
 @SuppressWarnings({ "unchecked", "varargs" })
 class RedisCommandBuilder<K, V> extends BaseRedisCommandBuilder<K, V> {
@@ -215,6 +225,18 @@ class RedisCommandBuilder<K, V> extends BaseRedisCommandBuilder<K, V> {
         CommandArgs<K, V> args = new CommandArgs<>(codec);
         args.addKey(key).add(state ? 1 : 0).add(start).add(end);
         return createCommand(BITPOS, new IntegerOutput<>(codec), args);
+    }
+
+    Command<K, V, V> blmove(K source, K destination, LMoveArgs lMoveArgs, long timeout) {
+        LettuceAssert.notNull(source, "Source " + MUST_NOT_BE_NULL);
+        LettuceAssert.notNull(destination, "Destination " + MUST_NOT_BE_NULL);
+        LettuceAssert.notNull(lMoveArgs, "LMoveArgs " + MUST_NOT_BE_NULL);
+
+        CommandArgs<K, V> args = new CommandArgs<>(codec);
+        args.addKey(source).addKey(destination);
+        lMoveArgs.build(args);
+        args.add(timeout);
+        return createCommand(BLMOVE, new ValueOutput<>(codec), args);
     }
 
     Command<K, V, KeyValue<K, V>> blpop(long timeout, K... keys) {
@@ -939,6 +961,12 @@ class RedisCommandBuilder<K, V> extends BaseRedisCommandBuilder<K, V> {
         return createCommand(HGETALL, new MapOutput<>(codec), key);
     }
 
+    Command<K, V, List<KeyValue<K, V>>> hgetallKeyValue(K key) {
+        notNullKey(key);
+
+        return createCommand(HGETALL, new KeyValueListOutput<>(codec), key);
+    }
+
     Command<K, V, Long> hgetall(KeyValueStreamingChannel<K, V> channel, K key) {
         notNullKey(key);
         notNull(channel);
@@ -1206,6 +1234,17 @@ class RedisCommandBuilder<K, V> extends BaseRedisCommandBuilder<K, V> {
         notNullKey(key);
 
         return createCommand(LLEN, new IntegerOutput<>(codec), key);
+    }
+
+    Command<K, V, V> lmove(K source, K destination, LMoveArgs lMoveArgs) {
+        LettuceAssert.notNull(source, "Source " + MUST_NOT_BE_NULL);
+        LettuceAssert.notNull(destination, "Destination " + MUST_NOT_BE_NULL);
+        LettuceAssert.notNull(lMoveArgs, "LMoveArgs " + MUST_NOT_BE_NULL);
+
+        CommandArgs<K, V> args = new CommandArgs<>(codec);
+        args.addKey(source).addKey(destination);
+        lMoveArgs.build(args);
+        return createCommand(LMOVE, new ValueOutput<>(codec), args);
     }
 
     Command<K, V, V> lpop(K key) {
@@ -1896,6 +1935,14 @@ class RedisCommandBuilder<K, V> extends BaseRedisCommandBuilder<K, V> {
         notNull(channel);
 
         return createCommand(SMEMBERS, new ValueStreamingOutput<>(codec, channel), key);
+    }
+
+    Command<K, V, List<Boolean>> smismember(K key, V... members) {
+        notNullKey(key);
+        LettuceAssert.notNull(members, "Members " + MUST_NOT_BE_NULL);
+        LettuceAssert.notEmpty(members, "Members " + MUST_NOT_BE_EMPTY);
+
+        return createCommand(SMISMEMBER, new BooleanListOutput<>(codec), key, members);
     }
 
     Command<K, V, Boolean> smove(K source, K destination, V member) {
@@ -2594,19 +2641,49 @@ class RedisCommandBuilder<K, V> extends BaseRedisCommandBuilder<K, V> {
         return createCommand(ZINCRBY, new DoubleOutput<>(codec), args);
     }
 
+    Command<K, V, List<V>> zinter(K... keys) {
+        notEmpty(keys);
+
+        return zinter(new ZAggregateArgs(), keys);
+    }
+
+    Command<K, V, List<V>> zinter(ZAggregateArgs aggregateArgs, K... keys) {
+        notEmpty(keys);
+
+        CommandArgs<K, V> args = new CommandArgs<>(codec);
+        args.add(keys.length).addKeys(keys);
+        aggregateArgs.build(args);
+        return createCommand(ZINTER, new ValueListOutput<>(codec), args);
+    }
+
+    Command<K, V, List<ScoredValue<V>>> zinterWithScores(K... keys) {
+        notEmpty(keys);
+
+        return zinterWithScores(new ZAggregateArgs(), keys);
+    }
+
+    Command<K, V, List<ScoredValue<V>>> zinterWithScores(ZAggregateArgs aggregateArgs, K... keys) {
+        notEmpty(keys);
+
+        CommandArgs<K, V> args = new CommandArgs<>(codec);
+        args.add(keys.length).addKeys(keys).add(WITHSCORES);
+        aggregateArgs.build(args);
+        return createCommand(ZINTER, new ScoredValueListOutput<>(codec), args);
+    }
+
     Command<K, V, Long> zinterstore(K destination, K... keys) {
         notEmpty(keys);
 
-        return zinterstore(destination, new ZStoreArgs(), keys);
+        return zinterstore(destination, new ZAggregateArgs(), keys);
     }
 
-    Command<K, V, Long> zinterstore(K destination, ZStoreArgs storeArgs, K... keys) {
+    Command<K, V, Long> zinterstore(K destination, ZAggregateArgs aggregateArgs, K... keys) {
         LettuceAssert.notNull(destination, "Destination " + MUST_NOT_BE_NULL);
-        LettuceAssert.notNull(storeArgs, "ZStoreArgs " + MUST_NOT_BE_NULL);
+        LettuceAssert.notNull(aggregateArgs, "ZStoreArgs " + MUST_NOT_BE_NULL);
         notEmpty(keys);
 
         CommandArgs<K, V> args = new CommandArgs<>(codec).addKey(destination).add(keys.length).addKeys(keys);
-        storeArgs.build(args);
+        aggregateArgs.build(args);
         return createCommand(ZINTERSTORE, new IntegerOutput<>(codec), args);
     }
 
@@ -2626,6 +2703,13 @@ class RedisCommandBuilder<K, V> extends BaseRedisCommandBuilder<K, V> {
         CommandArgs<K, V> args = new CommandArgs<>(codec);
         args.addKey(key).add(minValue(range)).add(maxValue(range));
         return createCommand(ZLEXCOUNT, new IntegerOutput<>(codec), args);
+    }
+
+    Command<K, V, List<Double>> zmscore(K key, V... members) {
+        notNullKey(key);
+        notEmpty(members);
+
+        return createCommand(ZMSCORE, new DoubleListOutput<>(codec), key, members);
     }
 
     Command<K, V, ScoredValue<V>> zpopmin(K key) {
@@ -3208,19 +3292,49 @@ class RedisCommandBuilder<K, V> extends BaseRedisCommandBuilder<K, V> {
         return createCommand(ZSCORE, new DoubleOutput<>(codec), key, member);
     }
 
+    Command<K, V, List<V>> zunion(K... keys) {
+        notEmpty(keys);
+
+        return zunion(new ZAggregateArgs(), keys);
+    }
+
+    Command<K, V, List<V>> zunion(ZAggregateArgs aggregateArgs, K... keys) {
+        notEmpty(keys);
+
+        CommandArgs<K, V> args = new CommandArgs<>(codec);
+        args.add(keys.length).addKeys(keys);
+        aggregateArgs.build(args);
+        return createCommand(ZUNION, new ValueListOutput<>(codec), args);
+    }
+
+    Command<K, V, List<ScoredValue<V>>> zunionWithScores(K... keys) {
+        notEmpty(keys);
+
+        return zunionWithScores(new ZAggregateArgs(), keys);
+    }
+
+    Command<K, V, List<ScoredValue<V>>> zunionWithScores(ZAggregateArgs aggregateArgs, K... keys) {
+        notEmpty(keys);
+
+        CommandArgs<K, V> args = new CommandArgs<>(codec);
+        args.add(keys.length).addKeys(keys).add(WITHSCORES);
+        aggregateArgs.build(args);
+        return createCommand(ZUNION, new ScoredValueListOutput<>(codec), args);
+    }
+
     Command<K, V, Long> zunionstore(K destination, K... keys) {
         notEmpty(keys);
         LettuceAssert.notNull(destination, "Destination " + MUST_NOT_BE_NULL);
 
-        return zunionstore(destination, new ZStoreArgs(), keys);
+        return zunionstore(destination, new ZAggregateArgs(), keys);
     }
 
-    Command<K, V, Long> zunionstore(K destination, ZStoreArgs storeArgs, K... keys) {
+    Command<K, V, Long> zunionstore(K destination, ZAggregateArgs aggregateArgs, K... keys) {
         notEmpty(keys);
 
         CommandArgs<K, V> args = new CommandArgs<>(codec);
         args.addKey(destination).add(keys.length).addKeys(keys);
-        storeArgs.build(args);
+        aggregateArgs.build(args);
         return createCommand(ZUNIONSTORE, new IntegerOutput<>(codec), args);
     }
 

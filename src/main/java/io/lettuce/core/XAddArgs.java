@@ -26,6 +26,7 @@ import io.lettuce.core.protocol.CommandKeyword;
  * {@link XAddArgs} is a mutable object and instances should be used only once to avoid shared mutable state.
  *
  * @author Mark Paluch
+ * @author dengliming
  * @since 5.1
  */
 public class XAddArgs {
@@ -35,6 +36,8 @@ public class XAddArgs {
     private Long maxlen;
 
     private boolean approximateTrimming;
+
+    private boolean nomkstream;
 
     /**
      * Builder entry points for {@link XAddArgs}.
@@ -55,6 +58,17 @@ public class XAddArgs {
          */
         public static XAddArgs maxlen(long count) {
             return new XAddArgs().maxlen(count);
+        }
+
+        /**
+         * Creates new {@link XAddArgs} and setting {@literal NOMKSTREAM}.
+         *
+         * @return new {@link XAddArgs} with {@literal NOMKSTREAM} set.
+         * @see XAddArgs#nomkstream()
+         * @since 6.1
+         */
+        public static XAddArgs nomkstream() {
+            return new XAddArgs().nomkstream();
         }
 
     }
@@ -108,6 +122,29 @@ public class XAddArgs {
         return this;
     }
 
+    /**
+     * Do add the message if the stream does not already exist.
+     *
+     * @return {@code this}
+     * @since 6.1
+     */
+    public XAddArgs nomkstream() {
+        return nomkstream(true);
+    }
+
+    /**
+     * Do add the message if the stream does not already exist.
+     *
+     * @param nomkstream {@code true} to not create a stream if it does not already exist.
+     * @return {@code this}
+     * @since 6.1
+     */
+    public XAddArgs nomkstream(boolean nomkstream) {
+
+        this.nomkstream = nomkstream;
+        return this;
+    }
+
     public <K, V> void build(CommandArgs<K, V> args) {
 
         if (maxlen != null) {
@@ -119,6 +156,10 @@ public class XAddArgs {
             }
 
             args.add(maxlen);
+        }
+
+        if (nomkstream) {
+            args.add(CommandKeyword.NOMKSTREAM);
         }
 
         if (id != null) {

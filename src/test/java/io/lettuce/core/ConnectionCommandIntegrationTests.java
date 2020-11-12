@@ -15,7 +15,6 @@
  */
 package io.lettuce.core;
 
-import static junit.framework.TestCase.assertNotNull;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.fail;
@@ -127,7 +126,7 @@ class ConnectionCommandIntegrationTests extends TestSupport {
             assertThat(redis.ping()).isEqualTo("PONG");
         } catch (Exception e) {
         } finally {
-            assertNotNull(connTestResp2);
+            assertThat(connTestResp2).isNotNull();
             if (connTestResp2 != null) {
                 connTestResp2.getStatefulConnection().close();
             }
@@ -255,12 +254,12 @@ class ConnectionCommandIntegrationTests extends TestSupport {
             assertThat(connection.auth(username, passwd)).isEqualTo("OK");
 
             assertThatThrownBy(() -> connection.auth(username, "invalid"))
-                    .hasMessage("WRONGPASS invalid username-password pair");
+                    .hasMessageContaining("WRONGPASS invalid username-password pair");
 
             assertThat(connection.auth(aclUsername, aclPasswd)).isEqualTo("OK");
 
             assertThatThrownBy(() -> connection.auth(aclUsername, "invalid"))
-                    .hasMessage("WRONGPASS invalid username-password pair");
+                    .hasMessageContaining("WRONGPASS invalid username-password pair");
 
             connection.getStatefulConnection().close();
         });

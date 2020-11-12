@@ -35,11 +35,13 @@ import io.lettuce.core.*;
 import io.lettuce.core.api.sync.RedisCommands;
 import io.lettuce.test.LettuceExtension;
 import io.lettuce.test.ListStreamingAdapter;
+import io.lettuce.test.condition.EnabledOnCommand;
 import io.lettuce.test.condition.RedisConditions;
 
 /**
  * @author Will Glozer
  * @author Mark Paluch
+ * @author dengliming
  */
 @ExtendWith(LettuceExtension.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -150,6 +152,15 @@ public class SetCommandIntegrationTests extends TestSupport {
         Long count = redis.smembers(streamingAdapter, key);
         assertThat(count.longValue()).isEqualTo(3);
         assertThat(streamingAdapter.getList()).containsOnly("a", "b", "c");
+    }
+
+    @Test
+    @EnabledOnCommand("SMISMEMBER")
+    void smismember() {
+        assertThat(redis.smismember(key, "a")).isEqualTo(list(false));
+        redis.sadd(key, "a");
+        assertThat(redis.smismember(key, "a")).isEqualTo(list(true));
+        assertThat(redis.smismember(key, "b", "a")).isEqualTo(list(false, true));
     }
 
     @Test

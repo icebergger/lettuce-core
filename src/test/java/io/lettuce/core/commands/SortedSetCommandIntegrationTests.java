@@ -15,15 +15,13 @@
  */
 package io.lettuce.core.commands;
 
-import static io.lettuce.core.Range.Boundary.including;
+import static io.lettuce.core.Range.Boundary.*;
+import static io.lettuce.core.ZStoreArgs.Builder.*;
 import static io.lettuce.core.ZStoreArgs.Builder.max;
 import static io.lettuce.core.ZStoreArgs.Builder.min;
 import static io.lettuce.core.ZStoreArgs.Builder.sum;
-import static io.lettuce.core.ZStoreArgs.Builder.weights;
-import static java.lang.Double.NEGATIVE_INFINITY;
-import static java.lang.Double.POSITIVE_INFINITY;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static java.lang.Double.*;
+import static org.assertj.core.api.Assertions.*;
 import static org.assertj.core.data.Offset.offset;
 
 import java.util.HashSet;
@@ -44,8 +42,12 @@ import io.lettuce.test.ListStreamingAdapter;
 import io.lettuce.test.condition.EnabledOnCommand;
 
 /**
+ * Integration tests for Sorted Sets via {@link io.lettuce.core.api.sync.RedisSortedSetCommands}.
+ *
  * @author Will Glozer
  * @author Mark Paluch
+ * @author dengliming
+ * @author Mikhael Sokolov
  */
 @ExtendWith(LettuceExtension.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -146,6 +148,40 @@ public class SortedSetCommandIntegrationTests extends TestSupport {
         assertThat(redis.zaddincr(key, ZAddArgs.Builder.xx(), 2.0, "a")).isNull();
         assertThat(redis.zaddincr(key, ZAddArgs.Builder.nx(), 2.0, "a").longValue()).isEqualTo(2);
         assertThat(redis.zaddincr(key, ZAddArgs.Builder.xx(), 2.0, "a").longValue()).isEqualTo(4);
+    }
+
+    @Test
+    @EnabledOnCommand("ZMSCORE") // Redis 6.2
+    void zaddgt() {
+        assertThat(redis.zadd(key, 1.0, "a")).isEqualTo(1);
+        // new score less than the current score
+        assertThat(redis.zadd(key, ZAddArgs.Builder.gt(), 0.0, "a")).isEqualTo(0);
+        assertThat(redis.zrangeWithScores(key, 0, -1)).isEqualTo(svlist(sv(1.0, "a")));
+
+        // new score greater than the current score
+        assertThat(redis.zadd(key, ZAddArgs.Builder.gt(), 2.0, "a")).isEqualTo(0);
+        assertThat(redis.zrangeWithScores(key, 0, -1)).isEqualTo(svlist(sv(2.0, "a")));
+
+        // add new element
+        assertThat(redis.zadd(key, ZAddArgs.Builder.gt(), 0.0, "b")).isEqualTo(1);
+        assertThat(redis.zrangeWithScores(key, 0, -1)).isEqualTo(svlist(sv(0.0, "b"), sv(2.0, "a")));
+    }
+
+    @Test
+    @EnabledOnCommand("ZMSCORE") // Redis 6.2
+    void zaddlt() {
+        assertThat(redis.zadd(key, 2.0, "a")).isEqualTo(1);
+        // new score greater than the current score
+        assertThat(redis.zadd(key, ZAddArgs.Builder.lt(), 3.0, "a")).isEqualTo(0);
+        assertThat(redis.zrangeWithScores(key, 0, -1)).isEqualTo(svlist(sv(2.0, "a")));
+
+        // new score less than the current score
+        assertThat(redis.zadd(key, ZAddArgs.Builder.lt(), 1.0, "a")).isEqualTo(0);
+        assertThat(redis.zrangeWithScores(key, 0, -1)).isEqualTo(svlist(sv(1.0, "a")));
+
+        // add new element
+        assertThat(redis.zadd(key, ZAddArgs.Builder.lt(), 0.0, "b")).isEqualTo(1);
+        assertThat(redis.zrangeWithScores(key, 0, -1)).isEqualTo(svlist(sv(0.0, "b"), sv(1.0, "a")));
     }
 
     @Test
@@ -763,6 +799,13 @@ public class SortedSetCommandIntegrationTests extends TestSupport {
     }
 
     @Test
+    @EnabledOnCommand("ZMSCORE")
+    public void zmscore() {
+        redis.zadd("zset1", 1.0, "a", 2.0, "b");
+        assertThat(redis.zmscore("zset1", "a", "c", "b")).isEqualTo(list(1.0, null, 2.0));
+    }
+
+    @Test
     void zrangebylex() {
         setup100KeyValues(new HashSet<>());
 
@@ -785,7 +828,38 @@ public class SortedSetCommandIntegrationTests extends TestSupport {
 
         setup100KeyValues(new HashSet<>());
         assertThat(redis.zremrangebylex(key, Range.create("value", "zzz"))).isEqualTo(100);
+    }
 
+    @Test
+    @EnabledOnCommand("ZUNION") // Redis 6.2
+    void zunion() {
+        String zset1 = "zset1";
+        String zset2 = "zset2";
+
+        assertThat(redis.zadd(zset1, 1.0, "a")).isEqualTo(1);
+        assertThat(redis.zadd(zset1, 2.0, "b")).isEqualTo(1);
+        assertThat(redis.zadd(zset2, 1.0, "a")).isEqualTo(1);
+        assertThat(redis.zadd(zset2, 2.0, "b")).isEqualTo(1);
+        assertThat(redis.zadd(zset2, 3.0, "c")).isEqualTo(1);
+
+        assertThat(redis.zunion(zset1, zset2)).isEqualTo(list("a", "c", "b"));
+        assertThat(redis.zunionWithScores(zset1, zset2)).isEqualTo(svlist(sv(2.0, "a"), sv(3.0, "c"), sv(4.0, "b")));
+    }
+
+    @Test
+    @EnabledOnCommand("ZINTER") // Redis 6.2
+    void zinter() {
+        String zset1 = "zset1";
+        String zset2 = "zset2";
+
+        assertThat(redis.zadd(zset1, 1.0, "a")).isEqualTo(1);
+        assertThat(redis.zadd(zset1, 2.0, "b")).isEqualTo(1);
+        assertThat(redis.zadd(zset2, 1.0, "a")).isEqualTo(1);
+        assertThat(redis.zadd(zset2, 2.0, "b")).isEqualTo(1);
+        assertThat(redis.zadd(zset2, 3.0, "c")).isEqualTo(1);
+
+        assertThat(redis.zinter(zset1, zset2)).isEqualTo(list("a", "b"));
+        assertThat(redis.zinterWithScores(zset1, zset2)).isEqualTo(svlist(sv(2.0, "a"), sv(4.0, "b")));
     }
 
     void setup100KeyValues(Set<String> expect) {
@@ -795,4 +869,5 @@ public class SortedSetCommandIntegrationTests extends TestSupport {
             expect.add(value + i);
         }
     }
+
 }

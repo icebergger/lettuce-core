@@ -15,12 +15,11 @@
  */
 package io.lettuce.core.commands;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
+import static org.assertj.core.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.*;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 import javax.inject.Inject;
 
@@ -29,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import io.lettuce.core.LMoveArgs;
 import io.lettuce.core.LPosArgs;
 import io.lettuce.core.TestSupport;
 import io.lettuce.core.api.sync.RedisCommands;
@@ -42,6 +42,7 @@ import io.lettuce.test.condition.RedisConditions;
  *
  * @author Will Glozer
  * @author Mark Paluch
+ * @author Mikhael Sokolov
  */
 @ExtendWith(LettuceExtension.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -125,9 +126,9 @@ public class ListCommandIntegrationTests extends TestSupport {
 
         assertThat(redis.lpos(key, "a")).isEqualTo(0);
         assertThat(redis.lpos(key, "c")).isEqualTo(2);
-        assertThat(redis.lpos(key, "c", LPosArgs.Builder.first(1))).isEqualTo(2);
-        assertThat(redis.lpos(key, "c", LPosArgs.Builder.first(2))).isEqualTo(6);
-        assertThat(redis.lpos(key, "c", LPosArgs.Builder.first(4))).isNull();
+        assertThat(redis.lpos(key, "c", LPosArgs.Builder.rank(1))).isEqualTo(2);
+        assertThat(redis.lpos(key, "c", LPosArgs.Builder.rank(2))).isEqualTo(6);
+        assertThat(redis.lpos(key, "c", LPosArgs.Builder.rank(4))).isNull();
 
         assertThat(redis.lpos(key, "c", 0)).contains(2L, 6L, 7L);
         assertThat(redis.lpos(key, "c", 0, LPosArgs.Builder.maxlen(1))).isEmpty();
@@ -267,5 +268,31 @@ public class ListCommandIntegrationTests extends TestSupport {
         redis.rpush(key, "one");
         assertThat((long) redis.rpushx(key, "two", "three")).isEqualTo(3);
         assertThat(redis.lrange(key, 0, -1)).isEqualTo(list("one", "two", "three"));
+    }
+
+    @Test
+    @EnabledOnCommand("LMOVE") // Redis 6.2
+    void lmove() {
+        String list1 = key;
+        String list2 = "38o54"; // yields in same slot as "key"
+
+        redis.rpush(list1, "one", "two", "three");
+        redis.lmove(list1, list2, LMoveArgs.Builder.rightLeft());
+
+        assertThat(redis.lrange(list1, 0, -1)).containsExactly("one", "two");
+        assertThat(redis.lrange(list2, 0, -1)).containsOnly("three");
+    }
+
+    @Test
+    @EnabledOnCommand("BLMOVE") // Redis 6.2
+    void blmove() {
+        String list1 = key;
+        String list2 = "38o54"; // yields in same slot as "key"
+
+        redis.rpush(list1, "one", "two", "three");
+        redis.blmove(list1, list2, LMoveArgs.Builder.leftRight(), 1000);
+
+        assertThat(redis.lrange(list1, 0, -1)).containsExactly("two", "three");
+        assertThat(redis.lrange(list2, 0, -1)).containsOnly("one");
     }
 }

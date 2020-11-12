@@ -33,6 +33,7 @@ import io.lettuce.core.models.role.RedisNodeDescription;
 /**
  * @author Mark Paluch
  * @author Ryosuke Hasebe
+ * @author Omer Cilingir
  */
 class ReadFromUnitTests {
 
@@ -84,6 +85,12 @@ class ReadFromUnitTests {
     }
 
     @Test
+    void anyReplica() {
+        List<RedisNodeDescription> result = ReadFrom.ANY_REPLICA.select(getNodes());
+        assertThat(result).hasSize(2).containsExactly(nearest, replica);
+    }
+
+    @Test
     void valueOfNull() {
         assertThatThrownBy(() -> ReadFrom.valueOf(null)).isInstanceOf(IllegalArgumentException.class);
     }
@@ -116,6 +123,11 @@ class ReadFromUnitTests {
     @Test
     void valueOfSlavePreferred() {
         assertThat(ReadFrom.valueOf("slavePreferred")).isEqualTo(ReadFrom.REPLICA_PREFERRED);
+    }
+
+    @Test
+    void valueOfAnyReplica() {
+        assertThat(ReadFrom.valueOf("anyReplica")).isEqualTo(ReadFrom.ANY_REPLICA);
     }
 
     private ReadFrom.Nodes getNodes() {

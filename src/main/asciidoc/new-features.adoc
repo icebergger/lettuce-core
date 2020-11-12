@@ -1,12 +1,19 @@
 [[new-features]]
 = New & Noteworthy
 
+[[new-features.6-1-0]]
+== What's new in Lettuce 6.1
+
+* Kotlin Coroutines support for `SCAN`/`HSCAN`/`SSCAN`/`ZSCAN` through `ScanFlow`.
+* Command Listener API through `RedisClient.addListener(CommandListener)`.
+
 [[new-features.6-0-0]]
 == What's new in Lettuce 6.0
 
 * Support for RESP3 usage with Redis 6 along with RESP2/RESP3 handshake and protocol version discovery.
 * ACL authentication using username and password or password-only authentication.
 * Cluster topology refresh is now non-blocking.
+* <<kotlin,Kotlin Coroutine Extensions>>.
 * RxJava 3 support.
 * Refined Scripting API accepting the Lua script either as `byte[]` or `String`.
 * Connection and Queue failures now no longer throw an exception but properly associate the failure with the Future handle.
@@ -18,6 +25,8 @@ Use methods accepting `Duration` instead.
 Use Spring Data Redis for a seamless Spring integration with Lettuce.
 * `AsyncConnectionPoolSupport.createBoundedObjectPool(…)` methods are now blocking to await pool initialization.
 * `DecodeBufferPolicy` for fine-grained memory reclaim control.
+* `RedisURI.toString()` renders masked password.
+* `ClientResources.commandLatencyCollector(…)` refactored into `ClientResources.commandLatencyRecorder(…)` returning `CommandLatencyRecorder`.
 
 [[new-features.5-3-0]]
 == What's new in Lettuce 5.3

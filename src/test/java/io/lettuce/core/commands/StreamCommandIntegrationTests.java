@@ -15,11 +15,16 @@
  */
 package io.lettuce.core.commands;
 
-import static io.lettuce.core.protocol.CommandType.XINFO;
-import static org.assertj.core.api.Assertions.assertThat;
+import static io.lettuce.core.protocol.CommandType.*;
+import static org.assertj.core.api.Assertions.*;
 
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 import javax.inject.Inject;
 
@@ -28,7 +33,16 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import io.lettuce.core.*;
+import io.lettuce.core.Consumer;
+import io.lettuce.core.Limit;
+import io.lettuce.core.Range;
+import io.lettuce.core.StreamMessage;
+import io.lettuce.core.TestSupport;
+import io.lettuce.core.TransactionResult;
+import io.lettuce.core.XAddArgs;
+import io.lettuce.core.XClaimArgs;
+import io.lettuce.core.XGroupCreateArgs;
+import io.lettuce.core.XReadArgs;
 import io.lettuce.core.XReadArgs.StreamOffset;
 import io.lettuce.core.api.sync.RedisCommands;
 import io.lettuce.core.codec.StringCodec;
@@ -43,6 +57,7 @@ import io.lettuce.test.condition.EnabledOnCommand;
  * Integration tests for {@link io.lettuce.core.api.sync.RedisStreamCommands}.
  *
  * @author Mark Paluch
+ * @author dengliming
  */
 @ExtendWith(LettuceExtension.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -89,6 +104,15 @@ public class StreamCommandIntegrationTests extends TestSupport {
         String id = redis.xadd(key, XAddArgs.Builder.maxlen(5).approximateTrimming(), "foo", "bar");
 
         assertThat(id).isNotNull();
+    }
+
+    @Test
+    @EnabledOnCommand("LMOVE") // Redis 6.2
+    void xaddWithNomkstream() {
+
+        String id = redis.xadd(key, XAddArgs.Builder.nomkstream(), Collections.singletonMap("foo", "bar"));
+        assertThat(id).isNull();
+        assertThat(redis.exists(key)).isEqualTo(0L);
     }
 
     @Test
@@ -321,6 +345,22 @@ public class StreamCommandIntegrationTests extends TestSupport {
     }
 
     @Test
+    void xgroupreadDeletedMessage() {
+
+        redis.xgroupCreate(StreamOffset.latest(key), "del-group", XGroupCreateArgs.Builder.mkstream());
+        redis.xadd(key, Collections.singletonMap("key", "value1"));
+        redis.xreadgroup(Consumer.from("del-group", "consumer1"), StreamOffset.lastConsumed(key));
+
+        redis.xadd(key, XAddArgs.Builder.maxlen(1), Collections.singletonMap("key", "value2"));
+
+        List<StreamMessage<String, String>> messages = redis.xreadgroup(Consumer.from("del-group", "consumer1"),
+                StreamOffset.from(key, "0-0"));
+
+        assertThat(messages).hasSize(1);
+        assertThat(messages.get(0).getBody()).isEmpty();
+    }
+
+    @Test
     void xpendingWithoutRead() {
 
         redis.xgroupCreate(StreamOffset.latest(key), "group", XGroupCreateArgs.Builder.mkstream());
@@ -507,4 +547,5 @@ public class StreamCommandIntegrationTests extends TestSupport {
 
         assertThat(redis.xgroupSetid(StreamOffset.latest(key), "group")).isEqualTo("OK");
     }
+
 }

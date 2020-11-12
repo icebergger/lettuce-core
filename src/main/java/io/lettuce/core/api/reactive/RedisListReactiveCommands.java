@@ -15,12 +15,12 @@
  */
 package io.lettuce.core.api.reactive;
 
-import java.util.List;
-import io.lettuce.core.KeyValue;
-import io.lettuce.core.LPosArgs;
-import io.lettuce.core.output.ValueStreamingChannel;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import io.lettuce.core.KeyValue;
+import io.lettuce.core.LPosArgs;
+import io.lettuce.core.LMoveArgs;
+import io.lettuce.core.output.ValueStreamingChannel;
 
 /**
  * Reactive executed commands for Lists.
@@ -34,47 +34,63 @@ import reactor.core.publisher.Mono;
 public interface RedisListReactiveCommands<K, V> {
 
     /**
+     * Atomically returns and removes the first/last element (head/tail depending on the
+     * wherefrom argument) of the list stored at source, and pushes the element at the
+     * first/last element (head/tail depending on the whereto argument) of the list stored at destination.
+     * When source is empty, Redis will block the connection until another client pushes to it
+     * or until timeout is reached.
+     *
+     * @param source the source key.
+     * @param destination the destination type: key.
+     * @param args command arguments to configure source and destination directions.
+     * @param timeout the timeout in seconds.
+     * @return V bulk-string-reply the element being popped and pushed.
+     * @since 6.1
+     */
+    Mono<V> blmove(K source, K destination, LMoveArgs args, long timeout);
+
+    /**
      * Remove and get the first element in a list, or block until one is available.
      *
-     * @param timeout the timeout in seconds
-     * @param keys the keys
+     * @param timeout the timeout in seconds.
+     * @param keys the keys.
      * @return KeyValue&lt;K,V&gt; array-reply specifically:
      *
-     *         A {@code null} multi-bulk when no element could be popped and the timeout expired. A two-element multi-bulk
-     *         with the first element being the name of the key where an element was popped and the second element being the
-     *         value of the popped element.
+     *         A {@code null} multi-bulk when no element could be popped and the timeout expired. A two-element multi-bulk with
+     *         the first element being the name of the key where an element was popped and the second element being the value of
+     *         the popped element.
      */
     Mono<KeyValue<K, V>> blpop(long timeout, K... keys);
 
     /**
      * Remove and get the last element in a list, or block until one is available.
      *
-     * @param timeout the timeout in seconds
-     * @param keys the keys
+     * @param timeout the timeout in seconds.
+     * @param keys the keys.
      * @return KeyValue&lt;K,V&gt; array-reply specifically:
      *
-     *         A {@code null} multi-bulk when no element could be popped and the timeout expired. A two-element multi-bulk
-     *         with the first element being the name of the key where an element was popped and the second element being the
-     *         value of the popped element.
+     *         A {@code null} multi-bulk when no element could be popped and the timeout expired. A two-element multi-bulk with
+     *         the first element being the name of the key where an element was popped and the second element being the value of
+     *         the popped element.
      */
     Mono<KeyValue<K, V>> brpop(long timeout, K... keys);
 
     /**
      * Pop a value from a list, push it to another list and return it; or block until one is available.
      *
-     * @param timeout the timeout in seconds
-     * @param source the source key
-     * @param destination the destination type: key
+     * @param timeout the timeout in seconds.
+     * @param source the source key.
+     * @param destination the destination type: key.
      * @return V bulk-string-reply the element being popped from {@code source} and pushed to {@code destination}. If
-     *         {@code timeout} is reached, a
+     *         {@code timeout} is reached, a.
      */
     Mono<V> brpoplpush(long timeout, K source, K destination);
 
     /**
      * Get an element from a list by its index.
      *
-     * @param key the key
-     * @param index the index type: long
+     * @param key the key.
+     * @param index the index type: long.
      * @return V bulk-string-reply the requested element, or {@code null} when {@code index} is out of range.
      */
     Mono<V> lindex(K key, long index);
@@ -82,10 +98,10 @@ public interface RedisListReactiveCommands<K, V> {
     /**
      * Insert an element before or after another element in a list.
      *
-     * @param key the key
-     * @param before the before
-     * @param pivot the pivot
-     * @param value the value
+     * @param key the key.
+     * @param before the before.
+     * @param pivot the pivot.
+     * @param value the value.
      * @return Long integer-reply the length of the list after the insert operation, or {@code -1} when the value {@code pivot}
      *         was not found.
      */
@@ -94,15 +110,28 @@ public interface RedisListReactiveCommands<K, V> {
     /**
      * Get the length of a list.
      *
-     * @param key the key
+     * @param key the key.
      * @return Long integer-reply the length of the list at {@code key}.
      */
     Mono<Long> llen(K key);
 
     /**
+     * Atomically returns and removes the first/last element (head/tail depending on the
+     * wherefrom argument) of the list stored at source, and pushes the element at the
+     * first/last element (head/tail depending on the whereto argument) of the list stored at destination.
+     *
+     * @param source the source key.
+     * @param destination the destination type: key.
+     * @param args command arguments to configure source and destination directions.
+     * @return V bulk-string-reply the element being popped and pushed.
+     * @since 6.1
+     */
+    Mono<V> lmove(K source, K destination, LMoveArgs args);
+
+    /**
      * Remove and get the first element in a list.
      *
-     * @param key the key
+     * @param key the key.
      * @return V bulk-string-reply the value of the first element, or {@code null} when {@code key} does not exist.
      */
     Mono<V> lpop(K key);
@@ -114,8 +143,8 @@ public interface RedisListReactiveCommands<K, V> {
      * always referring to what {@link #lindex(java.lang.Object, long)} would return. So first element from head is {@code 0},
      * and so forth.
      *
-     * @param key the key
-     * @param value the element to search for
+     * @param key the key.
+     * @param value the element to search for.
      * @return V integer-reply representing the matching element, or null if there is no match.
      * @since 5.3.2
      */
@@ -128,9 +157,9 @@ public interface RedisListReactiveCommands<K, V> {
      * always referring to what {@link #lindex(java.lang.Object, long)} would return. So first element from head is {@code 0},
      * and so forth.
      *
-     * @param key the key
-     * @param value the element to search for
-     * @param args command arguments to configure{@code FIRST} and {@code MAXLEN} options
+     * @param key the key.
+     * @param value the element to search for.
+     * @param args command arguments to configure{@code FIRST} and {@code MAXLEN} options.
      * @return V integer-reply representing the matching element, or null if there is no match.
      * @since 5.3.2
      */
@@ -142,9 +171,9 @@ public interface RedisListReactiveCommands<K, V> {
      * are always referring to what {@link #lindex(java.lang.Object, long)} would return. So first element from head is
      * {@code 0}, and so forth.
      *
-     * @param key the key
-     * @param value the element to search for
-     * @param count limit the number of matches
+     * @param key the key.
+     * @param value the element to search for.
+     * @param count limit the number of matches.
      * @return V integer-reply representing the matching elements, or empty if there is no match.
      * @since 5.3.2
      */
@@ -156,10 +185,10 @@ public interface RedisListReactiveCommands<K, V> {
      * are always referring to what {@link #lindex(java.lang.Object, long)} would return. So first element from head is
      * {@code 0}, and so forth.
      *
-     * @param key the key
-     * @param value the element to search for
-     * @param count limit the number of matches
-     * @param args command arguments to configure{@code FIRST} and {@code MAXLEN} options
+     * @param key the key.
+     * @param value the element to search for.
+     * @param count limit the number of matches.
+     * @param args command arguments to configure{@code FIRST} and {@code MAXLEN} options.
      * @return V integer-reply representing the matching elements, or empty if there is no match.
      * @since 5.3.2
      */
@@ -168,8 +197,8 @@ public interface RedisListReactiveCommands<K, V> {
     /**
      * Prepend one or multiple values to a list.
      *
-     * @param key the key
-     * @param values the value
+     * @param key the key.
+     * @param values the value.
      * @return Long integer-reply the length of the list after the push operations.
      */
     Mono<Long> lpush(K key, V... values);
@@ -177,8 +206,8 @@ public interface RedisListReactiveCommands<K, V> {
     /**
      * Prepend values to a list, only if the list exists.
      *
-     * @param key the key
-     * @param values the values
+     * @param key the key.
+     * @param values the values.
      * @return Long integer-reply the length of the list after the push operation.
      */
     Mono<Long> lpushx(K key, V... values);
@@ -186,9 +215,9 @@ public interface RedisListReactiveCommands<K, V> {
     /**
      * Get a range of elements from a list.
      *
-     * @param key the key
-     * @param start the start type: long
-     * @param stop the stop type: long
+     * @param key the key.
+     * @param start the start type: long.
+     * @param stop the stop type: long.
      * @return V array-reply list of elements in the specified range.
      */
     Flux<V> lrange(K key, long start, long stop);
@@ -196,20 +225,22 @@ public interface RedisListReactiveCommands<K, V> {
     /**
      * Get a range of elements from a list.
      *
-     * @param channel the channel
-     * @param key the key
-     * @param start the start type: long
-     * @param stop the stop type: long
+     * @param channel the channel.
+     * @param key the key.
+     * @param start the start type: long.
+     * @param stop the stop type: long.
      * @return Long count of elements in the specified range.
+     * @deprecated since 6.0 in favor of consuming large results through the {@link org.reactivestreams.Publisher} returned by {@link #lrange}.
      */
+    @Deprecated
     Mono<Long> lrange(ValueStreamingChannel<V> channel, K key, long start, long stop);
 
     /**
      * Remove elements from a list.
      *
-     * @param key the key
-     * @param count the count type: long
-     * @param value the value
+     * @param key the key.
+     * @param count the count type: long.
+     * @param value the value.
      * @return Long integer-reply the number of removed elements.
      */
     Mono<Long> lrem(K key, long count, V value);
@@ -217,27 +248,27 @@ public interface RedisListReactiveCommands<K, V> {
     /**
      * Set the value of an element in a list by its index.
      *
-     * @param key the key
-     * @param index the index type: long
-     * @param value the value
-     * @return String simple-string-reply
+     * @param key the key.
+     * @param index the index type: long.
+     * @param value the value.
+     * @return String simple-string-reply.
      */
     Mono<String> lset(K key, long index, V value);
 
     /**
      * Trim a list to the specified range.
      *
-     * @param key the key
-     * @param start the start type: long
-     * @param stop the stop type: long
-     * @return String simple-string-reply
+     * @param key the key.
+     * @param start the start type: long.
+     * @param stop the stop type: long.
+     * @return String simple-string-reply.
      */
     Mono<String> ltrim(K key, long start, long stop);
 
     /**
      * Remove and get the last element in a list.
      *
-     * @param key the key
+     * @param key the key.
      * @return V bulk-string-reply the value of the last element, or {@code null} when {@code key} does not exist.
      */
     Mono<V> rpop(K key);
@@ -245,8 +276,8 @@ public interface RedisListReactiveCommands<K, V> {
     /**
      * Remove the last element in a list, append it to another list and return it.
      *
-     * @param source the source key
-     * @param destination the destination type: key
+     * @param source the source key.
+     * @param destination the destination type: key.
      * @return V bulk-string-reply the element being popped and pushed.
      */
     Mono<V> rpoplpush(K source, K destination);
@@ -254,8 +285,8 @@ public interface RedisListReactiveCommands<K, V> {
     /**
      * Append one or multiple values to a list.
      *
-     * @param key the key
-     * @param values the value
+     * @param key the key.
+     * @param values the value.
      * @return Long integer-reply the length of the list after the push operation.
      */
     Mono<Long> rpush(K key, V... values);
@@ -263,10 +294,9 @@ public interface RedisListReactiveCommands<K, V> {
     /**
      * Append values to a list, only if the list exists.
      *
-     * @param key the key
-     * @param values the values
+     * @param key the key.
+     * @param values the values.
      * @return Long integer-reply the length of the list after the push operation.
      */
     Mono<Long> rpushx(K key, V... values);
-
 }

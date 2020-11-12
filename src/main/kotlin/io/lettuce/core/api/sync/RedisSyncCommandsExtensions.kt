@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2020 the original author or authors.
+ * Copyright 2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,19 +13,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.lettuce.apigenerator;
+package io.lettuce.core.api.sync
 
-import org.junit.runner.RunWith;
-import org.junit.runners.Suite;
+import io.lettuce.core.ExperimentalLettuceCoroutinesApi
+import io.lettuce.core.TransactionResult
 
 /**
- * Entrypoint to generate all Redis command interfaces from {@code src/main/templates}.
+ * Allows to create transaction DSL block with [RedisCommands].
  *
- * @author Mark Paluch
+ * @author Mikhael Sokolov
+ * @since 6.0
  */
-@RunWith(Suite.class)
-@Suite.SuiteClasses({ CreateAsyncApi.class, CreateSyncApi.class, CreateReactiveApi.class,
-        CreateAsyncNodeSelectionClusterApi.class, CreateSyncNodeSelectionClusterApi.class })
-public class GenerateCommandInterfaces {
-
+@ExperimentalLettuceCoroutinesApi
+inline fun <K, V> RedisCommands<K, V>.multi(action: RedisCommands<K, V>.() -> Unit): TransactionResult = try {
+    multi()
+    action.invoke(this)
+    exec()
+} catch (thr: Throwable) {
+    discard()
+    throw thr
 }

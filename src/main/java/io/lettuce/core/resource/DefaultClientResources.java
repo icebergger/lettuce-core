@@ -29,14 +29,21 @@ import io.lettuce.core.internal.LettuceAssert;
 import io.lettuce.core.internal.LettuceLists;
 import io.lettuce.core.metrics.CommandLatencyCollector;
 import io.lettuce.core.metrics.CommandLatencyCollectorOptions;
+import io.lettuce.core.metrics.CommandLatencyRecorder;
 import io.lettuce.core.metrics.DefaultCommandLatencyCollector;
 import io.lettuce.core.metrics.DefaultCommandLatencyCollectorOptions;
+import io.lettuce.core.metrics.MetricCollector;
 import io.lettuce.core.resource.Delay.StatefulDelay;
-import io.lettuce.core.tracing.TracerProvider;
 import io.lettuce.core.tracing.Tracing;
 import io.netty.util.HashedWheelTimer;
 import io.netty.util.Timer;
-import io.netty.util.concurrent.*;
+import io.netty.util.concurrent.DefaultEventExecutorGroup;
+import io.netty.util.concurrent.DefaultPromise;
+import io.netty.util.concurrent.DefaultThreadFactory;
+import io.netty.util.concurrent.EventExecutorGroup;
+import io.netty.util.concurrent.Future;
+import io.netty.util.concurrent.ImmediateEventExecutor;
+import io.netty.util.concurrent.PromiseCombiner;
 import io.netty.util.internal.SystemPropertyUtil;
 import io.netty.util.internal.logging.InternalLogger;
 import io.netty.util.internal.logging.InternalLoggerFactory;
@@ -48,7 +55,7 @@ import io.netty.util.internal.logging.InternalLoggerFactory;
  * </p>
  * {@link DefaultClientResources} allow to configure:
  * <ul>
- * <li>a {@code commandLatencyCollector} which is a provided instance of {@link io.lettuce.core.metrics.CommandLatencyCollector}
+ * <li>a {@code commandLatencyRecorder} which is a provided instance of {@link io.lettuce.core.metrics.CommandLatencyRecorder}
  * .</li>
  * <li>the {@code ioThreadPoolSize}, alternatively</li>
  * <li>a {@code eventLoopGroupProvider} which is a provided instance of {@link EventLoopGroupProvider}. Higher precedence than
@@ -108,9 +115,9 @@ public class DefaultClientResources implements ClientResources {
         }
     }
 
-    private final CommandLatencyCollector commandLatencyCollector;
+    private final CommandLatencyRecorder commandLatencyRecorder;
 
-    private final boolean sharedCommandLatencyCollector;
+    private final boolean sharedCommandLatencyRecorder;
 
     private final EventPublisherOptions commandLatencyPublisherOptions;
 
@@ -192,30 +199,31 @@ public class DefaultClientResources implements ClientResources {
             eventBus = builder.eventBus;
         }
 
-        if (builder.commandLatencyCollector == null) {
+        if (builder.commandLatencyRecorder == null) {
             if (DefaultCommandLatencyCollector.isAvailable()) {
                 if (builder.commandLatencyCollectorOptions != null) {
-                    commandLatencyCollector = CommandLatencyCollector.create(builder.commandLatencyCollectorOptions);
+                    commandLatencyRecorder = CommandLatencyCollector.create(builder.commandLatencyCollectorOptions);
                 } else {
-                    commandLatencyCollector = CommandLatencyCollector.create(CommandLatencyCollectorOptions.create());
+                    commandLatencyRecorder = CommandLatencyCollector.create(CommandLatencyCollectorOptions.create());
                 }
             } else {
                 logger.debug("LatencyUtils/HdrUtils are not available, metrics are disabled");
                 builder.commandLatencyCollectorOptions = CommandLatencyCollectorOptions.disabled();
-                commandLatencyCollector = CommandLatencyCollector.disabled();
+                commandLatencyRecorder = CommandLatencyRecorder.disabled();
             }
 
-            sharedCommandLatencyCollector = false;
+            sharedCommandLatencyRecorder = false;
         } else {
-            sharedCommandLatencyCollector = builder.sharedCommandLatencyCollector;
-            commandLatencyCollector = builder.commandLatencyCollector;
+            sharedCommandLatencyRecorder = builder.sharedCommandLatencyCollector;
+            commandLatencyRecorder = builder.commandLatencyRecorder;
         }
 
         commandLatencyPublisherOptions = builder.commandLatencyPublisherOptions;
 
-        if (commandLatencyCollector.isEnabled() && commandLatencyPublisherOptions != null) {
+        if (commandLatencyRecorder.isEnabled() && commandLatencyPublisherOptions != null
+                && commandLatencyRecorder instanceof CommandLatencyCollector) {
             metricEventPublisher = new DefaultCommandLatencyEventPublisher(eventExecutorGroup, commandLatencyPublisherOptions,
-                    eventBus, commandLatencyCollector);
+                    eventBus, (CommandLatencyCollector) commandLatencyRecorder);
         } else {
             metricEventPublisher = null;
         }
@@ -235,6 +243,10 @@ public class DefaultClientResources implements ClientResources {
         reconnectDelay = builder.reconnectDelay;
         nettyCustomizer = builder.nettyCustomizer;
         tracing = builder.tracing;
+
+        if (!sharedTimer && timer instanceof HashedWheelTimer) {
+            ((HashedWheelTimer) timer).start();
+        }
     }
 
     /**
@@ -262,7 +274,7 @@ public class DefaultClientResources implements ClientResources {
 
         private CommandLatencyCollectorOptions commandLatencyCollectorOptions = DefaultCommandLatencyCollectorOptions.create();
 
-        private CommandLatencyCollector commandLatencyCollector;
+        private CommandLatencyRecorder commandLatencyRecorder;
 
         private EventPublisherOptions commandLatencyPublisherOptions = DefaultEventPublisherOptions.create();
 
@@ -300,11 +312,13 @@ public class DefaultClientResources implements ClientResources {
         }
 
         /**
-         * Sets the {@link EventPublisherOptions} to publish command latency metrics using the {@link EventBus}.
+         * Sets the {@link EventPublisherOptions} to publish command latency metrics using the {@link EventBus} if the
+         * {@link CommandLatencyRecorder} is an instance of {@link CommandLatencyCollector} that allows latency metric
+         * retrieval.
          *
          * @param commandLatencyPublisherOptions the {@link EventPublisherOptions} to publish command latency metrics using the
          *        {@link EventBus}, must not be {@code null}.
-         * @return {@code this} {@link Builder}.
+         * @return {@code this} {@link ClientResources.Builder}.
          */
         @Override
         public Builder commandLatencyPublisherOptions(EventPublisherOptions commandLatencyPublisherOptions) {
@@ -321,8 +335,11 @@ public class DefaultClientResources implements ClientResources {
          *
          * @param commandLatencyCollectorOptions the command latency collector options, must not be {@code null}.
          * @return {@code this} {@link Builder}.
+         * @deprecated since 6.0. Configure {@link io.lettuce.core.metrics.CommandLatencyRecorder} directly using
+         *             {@link CommandLatencyCollectorOptions}.
          */
         @Override
+        @Deprecated
         public Builder commandLatencyCollectorOptions(CommandLatencyCollectorOptions commandLatencyCollectorOptions) {
 
             LettuceAssert.notNull(commandLatencyCollectorOptions, "CommandLatencyCollectorOptions must not be null");
@@ -332,18 +349,18 @@ public class DefaultClientResources implements ClientResources {
         }
 
         /**
-         * Sets the {@link CommandLatencyCollector} that can that can be used across different instances of the RedisClient.
+         * Sets the {@link CommandLatencyRecorder} that can that can be used across different instances of the RedisClient.
          *
-         * @param commandLatencyCollector the command latency collector, must not be {@code null}.
+         * @param commandLatencyRecorder the command latency recorder, must not be {@code null}.
          * @return {@code this} {@link Builder}.
          */
         @Override
-        public Builder commandLatencyCollector(CommandLatencyCollector commandLatencyCollector) {
+        public Builder commandLatencyRecorder(CommandLatencyRecorder commandLatencyRecorder) {
 
-            LettuceAssert.notNull(commandLatencyCollector, "CommandLatencyCollector must not be null");
+            LettuceAssert.notNull(commandLatencyRecorder, "CommandLatencyRecorder must not be null");
 
             this.sharedCommandLatencyCollector = true;
-            this.commandLatencyCollector = commandLatencyCollector;
+            this.commandLatencyRecorder = commandLatencyRecorder;
             return this;
         }
 
@@ -351,13 +368,13 @@ public class DefaultClientResources implements ClientResources {
          * Sets the thread pool size (number of threads to use) for computation operations (default value is the number of
          * CPUs). The thread pool size is only effective if no {@code eventExecutorGroup} is provided.
          *
-         * @param computationThreadPoolSize the thread pool size, must be greater {@code 0}.
+         * @param computationThreadPoolSize the thread pool size, must be greater than {@code 0}.
          * @return {@code this} {@link Builder}.
          */
         @Override
         public Builder computationThreadPoolSize(int computationThreadPoolSize) {
 
-            LettuceAssert.isTrue(computationThreadPoolSize > 0, "Computation thread pool size must be greater zero");
+            LettuceAssert.isTrue(computationThreadPoolSize > 0, "Computation thread pool size must be greater than zero");
 
             this.computationThreadPoolSize = computationThreadPoolSize;
             return this;
@@ -553,7 +570,6 @@ public class DefaultClientResources implements ClientResources {
         }
 
         /**
-         *
          * @return a new instance of {@link DefaultClientResources}.
          */
         @Override
@@ -568,7 +584,7 @@ public class DefaultClientResources implements ClientResources {
      * {@link DefaultClientResources}.
      * <p>
      * Note: The resulting {@link DefaultClientResources} retains shared state for {@link Timer},
-     * {@link CommandLatencyCollector}, {@link EventExecutorGroup}, and {@link EventLoopGroupProvider} if these are left
+     * {@link CommandLatencyRecorder}, {@link EventExecutorGroup}, and {@link EventLoopGroupProvider} if these are left
      * unchanged. Thus you need only to shut down the last created {@link ClientResources} instances. Shutdown affects any
      * previously created {@link ClientResources}.
      * </p>
@@ -583,7 +599,7 @@ public class DefaultClientResources implements ClientResources {
 
         Builder builder = new Builder();
 
-        builder.commandLatencyCollector(commandLatencyCollector())
+        builder.commandLatencyRecorder(commandLatencyRecorder())
                 .commandLatencyPublisherOptions(commandLatencyPublisherOptions()).dnsResolver(dnsResolver())
                 .eventBus(eventBus()).eventExecutorGroup(eventExecutorGroup()).reconnectDelay(reconnectDelay)
                 .socketAddressResolver(socketAddressResolver()).nettyCustomizer(nettyCustomizer()).timer(timer())
@@ -652,8 +668,8 @@ public class DefaultClientResources implements ClientResources {
             aggregator.add(shutdown);
         }
 
-        if (!sharedCommandLatencyCollector) {
-            commandLatencyCollector.shutdown();
+        if (!sharedCommandLatencyRecorder && commandLatencyRecorder instanceof MetricCollector) {
+            ((MetricCollector<?>) commandLatencyRecorder).shutdown();
         }
 
         aggregator.finish(voidPromise);
@@ -662,8 +678,8 @@ public class DefaultClientResources implements ClientResources {
     }
 
     @Override
-    public CommandLatencyCollector commandLatencyCollector() {
-        return commandLatencyCollector;
+    public CommandLatencyRecorder commandLatencyRecorder() {
+        return commandLatencyRecorder;
     }
 
     @Override

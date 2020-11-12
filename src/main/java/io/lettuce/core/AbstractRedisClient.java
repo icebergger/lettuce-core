@@ -22,19 +22,35 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.*;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import io.lettuce.core.internal.*;
 import reactor.core.publisher.Mono;
 import io.lettuce.core.Transports.NativeTransports;
+import io.lettuce.core.event.command.CommandListener;
+import io.lettuce.core.internal.AsyncCloseable;
+import io.lettuce.core.internal.Exceptions;
+import io.lettuce.core.internal.Futures;
+import io.lettuce.core.internal.LettuceAssert;
+import io.lettuce.core.internal.LettuceStrings;
 import io.lettuce.core.protocol.ConnectionWatchdog;
 import io.lettuce.core.protocol.RedisHandshakeHandler;
 import io.lettuce.core.resource.ClientResources;
 import io.lettuce.core.resource.DefaultClientResources;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBufAllocator;
-import io.netty.channel.*;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelOption;
+import io.netty.channel.ChannelPipeline;
+import io.netty.channel.EventLoopGroup;
 import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -64,6 +80,12 @@ public abstract class AbstractRedisClient {
 
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(AbstractRedisClient.class);
 
+    private static final int EVENTLOOP_ACQ_INACTIVE = 0;
+
+    private static final int EVENTLOOP_ACQ_ACTIVE = 1;
+
+    private final AtomicInteger eventLoopGroupCas = new AtomicInteger();
+
     protected final ConnectionEvents connectionEvents = new ConnectionEvents();
 
     protected final Set<Closeable> closeableResources = ConcurrentHashMap.newKeySet();
@@ -71,6 +93,8 @@ public abstract class AbstractRedisClient {
     protected final ChannelGroup channels;
 
     private final ClientResources clientResources;
+
+    private final List<CommandListener> commandListeners = new ArrayList<>();
 
     private final Map<Class<? extends EventLoopGroup>, EventLoopGroup> eventLoopGroups = new ConcurrentHashMap<>(2);
 
@@ -202,6 +226,33 @@ public abstract class AbstractRedisClient {
     }
 
     /**
+     * Add a listener for Redis Command events. The listener is notified on each command start/success/failure.
+     *
+     * @param listener must not be {@code null}
+     * @since 6.1
+     */
+    public void addListener(CommandListener listener) {
+        LettuceAssert.notNull(listener, "CommandListener must not be null");
+        commandListeners.add(listener);
+    }
+
+    /**
+     * Removes a listener.
+     *
+     * @param listener must not be {@code null}
+     * @since 6.1
+     */
+    public void removeListener(CommandListener listener) {
+
+        LettuceAssert.notNull(listener, "CommandListener must not be null");
+        commandListeners.remove(listener);
+    }
+
+    protected List<CommandListener> getCommandListeners() {
+        return commandListeners;
+    }
+
+    /**
      * Populate connection builder with necessary resources.
      *
      * @param socketAddressSupplier address supplier for initial connect and re-connect
@@ -246,7 +297,22 @@ public abstract class AbstractRedisClient {
         }
     }
 
-    private synchronized EventLoopGroup getEventLoopGroup(ConnectionPoint connectionPoint) {
+    private EventLoopGroup getEventLoopGroup(ConnectionPoint connectionPoint) {
+
+        for (;;) {
+            if (!eventLoopGroupCas.compareAndSet(EVENTLOOP_ACQ_INACTIVE, EVENTLOOP_ACQ_ACTIVE)) {
+                continue;
+            }
+
+            try {
+                return doGetEventExecutor(connectionPoint);
+            } finally {
+                eventLoopGroupCas.set(EVENTLOOP_ACQ_INACTIVE);
+            }
+        }
+    }
+
+    private EventLoopGroup doGetEventExecutor(ConnectionPoint connectionPoint) {
 
         if (connectionPoint.getSocket() == null && !eventLoopGroups.containsKey(Transports.eventLoopGroupClass())) {
             eventLoopGroups.put(Transports.eventLoopGroupClass(),
